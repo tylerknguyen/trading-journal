@@ -2,7 +2,7 @@
 
 A local-first trading journal and portfolio tracker inspired by the workflow of professional trading dashboards. It supports Webull option-order CSV imports, Webull API sync, daily P&L analytics, calendar/day views, per-trade journaling, rule tracking, and trade detail pages.
 
-The app runs on your own computer. Trades and journal entries are stored in your browser local storage, and Webull API keys stay on the local Python server instead of being exposed to frontend code.
+The app runs on your own computer. Trades and journal entries are stored in your browser local storage, and Webull API keys stay on the local Python server instead of being exposed to frontend code. Webull API sync is the intended primary import path; CSV upload is kept as an optional manual fallback.
 
 ## Features
 
@@ -13,8 +13,8 @@ The app runs on your own computer. Trades and journal entries are stored in your
 - Recent trades and open positions tables.
 - Journal page with saved notes, strategy, setup, emotion, mistake, and lesson fields.
 - Trade detail page with executions, stats, notes, running P&L, and TradingView chart embed.
-- CSV import for Webull option order exports.
 - Webull API sync through a local Python backend.
+- Optional CSV import for manual Webull option order exports.
 - Double-click Windows launcher.
 
 ## Quick Start On Windows
@@ -117,9 +117,9 @@ Notes:
 - `WEBULL_SYNC_START_DATE` and `WEBULL_SYNC_END_DATE` are optional. If blank, the app requests year-to-date order history.
 - Do not commit `.env`, `conf/`, logs, or local token files. They are ignored by `.gitignore`.
 
-## CSV Import
+## Optional CSV Import
 
-Use `Upload CSV` in the dashboard. The importer supports Webull option-order exports and common trade-history headers, including:
+Use `Upload CSV` in the dashboard only if you want a manual import. Webull API sync is preferred because it replaces the synced date window with broker data. The CSV importer supports Webull option-order exports and common trade-history headers, including:
 
 - `Close Date`, `Date`, `Trade Date`, `Filled Time`
 - `Symbol`, `Ticker`, `Underlying`, `Instrument`

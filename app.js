@@ -678,7 +678,10 @@ async function syncWebull() {
     }
 
     const merged = payload.source === "Webull API"
-      ? mergeWebullTrades(state.trades, trades)
+      ? mergeWebullTrades(state.trades, trades, {
+        startDate: payload.startDate || "",
+        endDate: payload.endDate || "",
+      })
       : mergeTrades(state.trades, trades);
     state.trades = merged;
     persistTrades(merged);
@@ -692,7 +695,9 @@ async function syncWebull() {
       lastDate: merged.map((trade) => trade.closeDate).sort().at(-1) || "",
       importedAt: new Date().toISOString(),
       lastSync: payload.syncedAt || new Date().toISOString(),
-      reconcilerVersion: 3,
+      syncStartDate: payload.startDate || "",
+      syncEndDate: payload.endDate || "",
+      reconcilerVersion: 4,
     });
     renderImportMeta();
     syncMonthToLatestTrade();
@@ -727,7 +732,7 @@ function webullSyncFailureMessage(message) {
 
 function maybeAutoReconcileWebull() {
   const meta = state.importMeta;
-  if (!meta || meta.source !== "Webull API" || meta.reconcilerVersion === 3) return;
+  if (!meta || meta.source !== "Webull API" || meta.reconcilerVersion === 4) return;
   window.setTimeout(() => syncWebull(), 350);
 }
 
@@ -737,15 +742,23 @@ function mergeTrades(existing, incoming) {
   return [...map.values()].sort((a, b) => `${a.closeDate} ${a.closeTime}`.localeCompare(`${b.closeDate} ${b.closeTime}`));
 }
 
-function mergeWebullTrades(existing, incoming) {
+function mergeWebullTrades(existing, incoming, syncWindow = {}) {
   const cleanedExisting = removeSampleTrades(existing);
   if (looksLikeSampleData(existing) || !cleanedExisting.length) {
     return mergeTrades([], incoming.map((trade) => ({ ...trade, source: "Webull API" })));
   }
   const incomingDates = new Set(incoming.map((trade) => trade.closeDate));
   transferJournalsToIncomingTrades(cleanedExisting, incoming);
-  const retained = cleanedExisting.filter((trade) => !incomingDates.has(trade.closeDate));
+  const retained = cleanedExisting.filter((trade) => {
+    if (isDateInSyncWindow(trade.closeDate, syncWindow)) return false;
+    return !incomingDates.has(trade.closeDate);
+  });
   return mergeTrades(retained, incoming.map((trade) => ({ ...trade, source: "Webull API" })));
+}
+
+function isDateInSyncWindow(date, syncWindow = {}) {
+  if (!date || !syncWindow.startDate || !syncWindow.endDate) return false;
+  return date >= syncWindow.startDate && date <= syncWindow.endDate;
 }
 
 function removeSampleTrades(trades) {
