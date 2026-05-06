@@ -681,13 +681,22 @@ async function syncWebull() {
       throw new Error(payload.error || `Sync failed with HTTP ${response.status}`);
     }
 
+    if (payload.rateLimited && payload.retryAfterSeconds) {
+      setSyncCooldown(Number(payload.retryAfterSeconds));
+    }
+
     const trades = Array.isArray(payload.trades) && payload.trades.length
       ? payload.trades.map((trade) => createTrade({ ...trade, source: payload.source || "Webull API" }))
       : rowsToTrades(payload.rows || []);
     if (!trades.length) {
       const warningText = formatSyncWarnings(payload.warnings || []);
-      setSyncStatus(warningText || "Webull sync returned no filled/closed trades yet.", warningText ? "error" : "ok");
-      showToast(warningText ? "Webull sync completed with skipped windows." : "Webull sync completed with no closed trades.");
+      const baseMessage = payload.rateLimited
+        ? "Webull rate-limited before any trades synced. Earlier ranges will retry after the cooldown."
+        : "Webull sync returned no filled/closed trades yet.";
+      setSyncStatus(warningText ? `${baseMessage} ${warningText}` : baseMessage, payload.rateLimited || warningText ? "error" : "ok");
+      showToast(payload.rateLimited
+        ? "Webull rate-limited; no new trades this attempt."
+        : (warningText ? "Webull sync completed with skipped windows." : "Webull sync completed with no closed trades."));
       return;
     }
 
@@ -720,8 +729,11 @@ async function syncWebull() {
     syncMonthToLatestTrade();
     render();
     const warningText = formatSyncWarnings(payload.warnings || []);
-    const syncedText = `Webull sync imported ${trades.length} closed trades (${payload.rawOrderCount || 0} raw orders).`;
-    setSyncStatus(warningText ? `${syncedText} ${warningText}` : syncedText, warningText ? "error" : "ok");
+    const syncedText = payload.rateLimited
+      ? `Webull sync imported ${trades.length} closed trades before rate limit (${payload.rawOrderCount || 0} raw orders). Older ranges will retry after the cooldown.`
+      : `Webull sync imported ${trades.length} closed trades (${payload.rawOrderCount || 0} raw orders).`;
+    const tone = payload.rateLimited || warningText ? "error" : "ok";
+    setSyncStatus(warningText ? `${syncedText} ${warningText}` : syncedText, tone);
     showToast(syncedText);
   } catch (error) {
     const message = String(error.message || error);

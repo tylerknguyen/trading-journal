@@ -13,3 +13,5 @@ server.err.log
 conf/
 *-screenshot.png
 smoke-*.png
+.claude/
+webull_probe.py

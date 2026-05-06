@@ -27,6 +27,7 @@ class WebullHistoryResult:
     orders: list[dict[str, Any]]
     synced_ranges: list[dict[str, str]]
     warnings: list[str]
+    rate_limited: bool = False
 
 
 @dataclass
@@ -77,7 +78,8 @@ def load_dotenv(path: Path) -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, value)
+        if value or key not in os.environ:
+            os.environ[key] = value
 
 
 def normalize_api_endpoint(value: str | None) -> str:
@@ -151,6 +153,7 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         "endDate": config.sync_end_date,
         "syncedDateRanges": history.synced_ranges,
         "warnings": history.warnings,
+        "rateLimited": history.rate_limited,
         "rowCount": len(rows),
         "tradeCount": len(trades),
         "netPnl": round(sum(float(trade["netPnl"]) for trade in trades), 2),
@@ -175,8 +178,7 @@ def create_trade_client(config: WebullConfig) -> Any:
         token_check_duration_seconds=max(5, config.token_verify_timeout_seconds),
         token_check_interval_seconds=max(1, config.token_verify_interval_seconds),
     )
-    api_client._stream_logger_set = True
-    api_client._file_logger_set = True
+    # Allow SDK to log so we can diagnose OAUTH_OPENAPI_SYSTEM_ERROR
     if config.api_endpoint:
         api_client.add_endpoint(config.region, config.api_endpoint)
     try:
@@ -299,6 +301,14 @@ def describe_webull_exception(error: Exception) -> str:
             "Webull created an access token, but it is still pending verification. "
             "Approve the Webull API verification prompt in the Webull app/SMS, then click Sync Webull again."
         )
+    if code == "OAUTH_OPENAPI_SYSTEM_ERROR":
+        details = f" (request id {request_id})" if request_id else ""
+        return (
+            "Webull's OpenAPI returned a system error before reading the request"
+            f"{details}. This usually means the cached access token went stale or your IP "
+            "fell off Webull's allowlist. Delete conf/token.txt, confirm your current public IP "
+            "is allowed in Webull API Keys Management, then click Sync Webull and approve any verification prompt."
+        )
     if code:
         details = f"HTTP {status}, Webull code {code}"
         if request_id:
@@ -320,6 +330,7 @@ def fetch_order_history_with_method(
         orders: list[dict[str, Any]] = []
         synced_ranges: list[dict[str, str]] = []
         warnings: list[str] = []
+        rate_limited = False
         chunks = list(iter_date_chunks(start_date, end_date, chunk_days))
         chunks.reverse()
         for index, (chunk_start, chunk_end) in enumerate(chunks):
@@ -329,13 +340,23 @@ def fetch_order_history_with_method(
                 chunk_orders = fetch_order_history_window(method, account_id, page_size, chunk_start, chunk_end, request_delay_seconds)
                 orders.extend(chunk_orders)
                 synced_ranges.append({"startDate": chunk_start, "endDate": chunk_end})
+                if len(chunk_orders) >= page_size:
+                    warnings.append(
+                        f"Webull order history {chunk_start} to {chunk_end} returned {len(chunk_orders)} orders "
+                        f"(page_size={page_size}); chunk may be truncated. Lower WEBULL_SYNC_CHUNK_DAYS or raise "
+                        "WEBULL_ORDER_PAGE_SIZE in .env."
+                    )
             except Exception as error:
                 if is_rate_limit_error(error):
+                    rate_limited = True
+                    warnings.append(describe_rate_limit_warning(chunk_start, chunk_end, len(chunks) - index - 1))
+                    break
+                if is_systemic_webull_error(error):
                     raise
                 warning = describe_history_window_warning(chunk_start, chunk_end, error)
                 warnings.append(warning)
                 continue
-        if not orders and warnings:
+        if not orders and warnings and not rate_limited:
             try:
                 fallback_orders = fetch_order_history_window(method, account_id, page_size, None, None, request_delay_seconds)
                 if fallback_orders:
@@ -349,9 +370,11 @@ def fetch_order_history_with_method(
                     warnings.append("Dated Webull history failed, so the sync imported Webull's default recent history window.")
             except Exception as error:
                 if is_rate_limit_error(error):
-                    raise
-                warnings.append(f"Webull default recent-history fallback also failed: {getattr(error, 'error_code', '') or type(error).__name__}")
-        return WebullHistoryResult(dedupe_orders(orders), synced_ranges, warnings)
+                    rate_limited = True
+                    warnings.append("Webull rate-limited the fallback recent-history request.")
+                else:
+                    warnings.append(f"Webull default recent-history fallback also failed: {getattr(error, 'error_code', '') or type(error).__name__}")
+        return WebullHistoryResult(dedupe_orders(orders), synced_ranges, warnings, rate_limited)
     orders = fetch_order_history_window(method, account_id, page_size, start_date, end_date, request_delay_seconds)
     synced_ranges = [{"startDate": start_date or "", "endDate": end_date or ""}] if start_date or end_date else []
     return WebullHistoryResult(orders, synced_ranges, [])
@@ -365,37 +388,14 @@ def fetch_order_history_window(
     end_date: str | None = None,
     request_delay_seconds: float = 1.5,
 ) -> list[dict[str, Any]]:
-    orders: list[dict[str, Any]] = []
-    last_client_order_id = None
-    last_order_id = None
-    seen_cursors: set[tuple[str | None, str | None]] = set()
-
-    for _page in range(1, 8):
-        response = call_history_method(
-            method,
-            account_id,
-            page_size,
-            last_client_order_id,
-            last_order_id,
-            start_date,
-            end_date,
-        )
-        payload = response_json(response)
-        page_orders = extract_list(payload)
-        if not page_orders:
-            break
-        orders.extend(page_orders)
-        if len(page_orders) < page_size:
-            break
-        time.sleep(max(0, request_delay_seconds))
-        last_order = page_orders[-1]
-        last_client_order_id = pick_deep(last_order, "client_order_id", "clientOrderId")
-        last_order_id = pick_deep(last_order, "order_id", "orderId")
-        cursor = (str(last_client_order_id) if last_client_order_id else None, str(last_order_id) if last_order_id else None)
-        if not any(cursor) or cursor in seen_cursors:
-            break
-        seen_cursors.add(cursor)
-    return orders
+    # Webull's OpenAPI gateway returns OAUTH_OPENAPI_SYSTEM_ERROR (HTTP 417)
+    # for any cursor-paginated follow-up call (with or without dates), so we
+    # rely on a large page_size to fit each chunk in a single request and skip
+    # pagination entirely. A WebullPageSizeCapHit warning is raised upstream
+    # if a chunk fills the page exactly, signalling possible truncation.
+    response = call_history_method(method, account_id, page_size, None, None, start_date, end_date)
+    payload = response_json(response)
+    return extract_list(payload)
 
 
 def iter_date_chunks(start_date: str, end_date: str, chunk_days: int) -> Iterable[tuple[str, str]]:
@@ -429,6 +429,21 @@ def is_rate_limit_error(error: Exception) -> bool:
     return getattr(error, "error_code", "") == "TOO_MANY_REQUESTS" or getattr(error, "http_status", "") == 429
 
 
+SYSTEMIC_WEBULL_ERROR_CODES = frozenset({
+    "OAUTH_OPENAPI_SYSTEM_ERROR",
+    "UNAUTHORIZED",
+    "IP_NOT_ALLOWED",
+    "SIGNATURE_ALGORITHM_NOT_SUPPORTED",
+    "ERROR_INIT_TOKEN",
+})
+
+
+def is_systemic_webull_error(error: Exception) -> bool:
+    if getattr(error, "error_code", "") in SYSTEMIC_WEBULL_ERROR_CODES:
+        return True
+    return "status:PENDING" in str(error)
+
+
 def describe_history_window_warning(start_date: str, end_date: str, error: Exception) -> str:
     code = getattr(error, "error_code", "") or type(error).__name__
     request_id = getattr(error, "request_id", "")
@@ -436,6 +451,15 @@ def describe_history_window_warning(start_date: str, end_date: str, error: Excep
     if request_id:
         detail += f" ({request_id})"
     return detail
+
+
+def describe_rate_limit_warning(start_date: str, end_date: str, remaining_chunks: int) -> str:
+    if remaining_chunks > 0:
+        return (
+            f"Webull rate-limited the sync at {start_date} to {end_date}. "
+            f"Kept earlier results; {remaining_chunks} earlier window{'s' if remaining_chunks != 1 else ''} still need to sync after the cooldown."
+        )
+    return f"Webull rate-limited the sync at {start_date} to {end_date}. Kept earlier results."
 
 
 def call_history_method(

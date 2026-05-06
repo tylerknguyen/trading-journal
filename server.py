@@ -53,6 +53,9 @@ class TradingJournalHandler(SimpleHTTPRequestHandler):
                 return
             payload = self.read_json()
             result = sync_webull_orders(payload)
+            if result.get("rateLimited"):
+                cooldown = arm_webull_rate_limit_cooldown()
+                result = {**result, "retryAfterSeconds": cooldown}
             self.send_json({"ok": True, **result})
         except WebullSyncError as error:
             retry_after = remember_webull_rate_limit(error)
@@ -117,9 +120,13 @@ def current_webull_retry_after() -> int:
 
 
 def remember_webull_rate_limit(error: Exception) -> int:
-    global WEBULL_RATE_LIMIT_UNTIL
     if "rate-limit" not in str(error).lower() and "rate limited" not in str(error).lower():
         return 0
+    return arm_webull_rate_limit_cooldown()
+
+
+def arm_webull_rate_limit_cooldown() -> int:
+    global WEBULL_RATE_LIMIT_UNTIL
     WEBULL_RATE_LIMIT_UNTIL = time.time() + WEBULL_RATE_LIMIT_SECONDS
     save_webull_rate_limit_until(WEBULL_RATE_LIMIT_UNTIL)
     return WEBULL_RATE_LIMIT_SECONDS
