@@ -685,8 +685,9 @@ async function syncWebull() {
       ? payload.trades.map((trade) => createTrade({ ...trade, source: payload.source || "Webull API" }))
       : rowsToTrades(payload.rows || []);
     if (!trades.length) {
-      setSyncStatus("Webull sync returned no filled/closed trades yet.", "ok");
-      showToast("Webull sync completed with no closed trades.");
+      const warningText = formatSyncWarnings(payload.warnings || []);
+      setSyncStatus(warningText || "Webull sync returned no filled/closed trades yet.", warningText ? "error" : "ok");
+      showToast(warningText ? "Webull sync completed with skipped windows." : "Webull sync completed with no closed trades.");
       return;
     }
 
@@ -694,6 +695,7 @@ async function syncWebull() {
       ? mergeWebullTrades(state.trades, trades, {
         startDate: payload.startDate || "",
         endDate: payload.endDate || "",
+        ranges: payload.syncedDateRanges || [],
       })
       : mergeTrades(state.trades, trades);
     state.trades = merged;
@@ -710,13 +712,16 @@ async function syncWebull() {
       lastSync: payload.syncedAt || new Date().toISOString(),
       syncStartDate: payload.startDate || "",
       syncEndDate: payload.endDate || "",
+      syncedDateRanges: payload.syncedDateRanges || [],
+      warnings: payload.warnings || [],
       reconcilerVersion: 4,
     });
     renderImportMeta();
     syncMonthToLatestTrade();
     render();
+    const warningText = formatSyncWarnings(payload.warnings || []);
     const syncedText = `Webull sync imported ${trades.length} closed trades (${payload.rawOrderCount || 0} raw orders).`;
-    setSyncStatus(syncedText, "ok");
+    setSyncStatus(warningText ? `${syncedText} ${warningText}` : syncedText, warningText ? "error" : "ok");
     showToast(syncedText);
   } catch (error) {
     const message = String(error.message || error);
@@ -741,6 +746,13 @@ function webullSyncFailureMessage(message) {
     return `${message}. Add your Webull keys to .env and restart python server.py.`;
   }
   return message;
+}
+
+function formatSyncWarnings(warnings) {
+  if (!Array.isArray(warnings) || !warnings.length) return "";
+  const visible = warnings.slice(0, 2).map((warning) => String(warning)).join(" ");
+  const extra = warnings.length > 2 ? ` ${warnings.length - 2} more skipped windows.` : "";
+  return `${visible}${extra}`;
 }
 
 function setSyncCooldown(seconds) {
@@ -807,6 +819,9 @@ function mergeWebullTrades(existing, incoming, syncWindow = {}) {
 }
 
 function isDateInSyncWindow(date, syncWindow = {}) {
+  if (Array.isArray(syncWindow.ranges) && syncWindow.ranges.length) {
+    return syncWindow.ranges.some((range) => date >= range.startDate && date <= range.endDate);
+  }
   if (!date || !syncWindow.startDate || !syncWindow.endDate) return false;
   return date >= syncWindow.startDate && date <= syncWindow.endDate;
 }

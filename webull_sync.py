@@ -23,6 +23,13 @@ class WebullSyncError(RuntimeError):
 
 
 @dataclass
+class WebullHistoryResult:
+    orders: list[dict[str, Any]]
+    synced_ranges: list[dict[str, str]]
+    warnings: list[str]
+
+
+@dataclass
 class WebullConfig:
     app_key: str
     app_secret: str
@@ -124,7 +131,7 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     trade_client = create_trade_client(config)
     account_id = config.account_id or load_cached_account_id() or resolve_account_id(trade_client)
     cache_account_id(account_id)
-    raw_orders = fetch_order_history(
+    history = fetch_order_history(
         trade_client,
         account_id,
         config.page_size,
@@ -133,6 +140,7 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         config.sync_chunk_days,
         config.sync_request_delay_seconds,
     )
+    raw_orders = history.orders
     rows = normalize_orders_to_csv_rows(raw_orders)
     trades = build_closed_trades_from_rows(rows)
     return {
@@ -141,6 +149,8 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         "rawOrderCount": len(raw_orders),
         "startDate": config.sync_start_date,
         "endDate": config.sync_end_date,
+        "syncedDateRanges": history.synced_ranges,
+        "warnings": history.warnings,
         "rowCount": len(rows),
         "tradeCount": len(trades),
         "netPnl": round(sum(float(trade["netPnl"]) for trade in trades), 2),
@@ -218,7 +228,7 @@ def fetch_order_history(
     end_date: str | None = None,
     chunk_days: int = 31,
     request_delay_seconds: float = 1.5,
-) -> list[dict[str, Any]]:
+) -> WebullHistoryResult:
     candidates = []
     for client_name in ("order_v2", "order_v3", "order"):
         client = getattr(trade_client, client_name, None)
@@ -305,15 +315,46 @@ def fetch_order_history_with_method(
     end_date: str | None = None,
     chunk_days: int = 31,
     request_delay_seconds: float = 1.5,
-) -> list[dict[str, Any]]:
+) -> WebullHistoryResult:
     if start_date and end_date and chunk_days > 0:
         orders: list[dict[str, Any]] = []
-        for index, (chunk_start, chunk_end) in enumerate(iter_date_chunks(start_date, end_date, chunk_days)):
+        synced_ranges: list[dict[str, str]] = []
+        warnings: list[str] = []
+        chunks = list(iter_date_chunks(start_date, end_date, chunk_days))
+        chunks.reverse()
+        for index, (chunk_start, chunk_end) in enumerate(chunks):
             if index:
                 time.sleep(max(0, request_delay_seconds))
-            orders.extend(fetch_order_history_window(method, account_id, page_size, chunk_start, chunk_end, request_delay_seconds))
-        return dedupe_orders(orders)
-    return fetch_order_history_window(method, account_id, page_size, start_date, end_date, request_delay_seconds)
+            try:
+                chunk_orders = fetch_order_history_window(method, account_id, page_size, chunk_start, chunk_end, request_delay_seconds)
+                orders.extend(chunk_orders)
+                synced_ranges.append({"startDate": chunk_start, "endDate": chunk_end})
+            except Exception as error:
+                if is_rate_limit_error(error):
+                    raise
+                warning = describe_history_window_warning(chunk_start, chunk_end, error)
+                warnings.append(warning)
+                continue
+        if not orders and warnings:
+            try:
+                fallback_orders = fetch_order_history_window(method, account_id, page_size, None, None, request_delay_seconds)
+                if fallback_orders:
+                    fallback_end = datetime.now().date()
+                    fallback_start = fallback_end - timedelta(days=7)
+                    orders.extend(fallback_orders)
+                    synced_ranges.append({
+                        "startDate": fallback_start.strftime("%Y-%m-%d"),
+                        "endDate": fallback_end.strftime("%Y-%m-%d"),
+                    })
+                    warnings.append("Dated Webull history failed, so the sync imported Webull's default recent history window.")
+            except Exception as error:
+                if is_rate_limit_error(error):
+                    raise
+                warnings.append(f"Webull default recent-history fallback also failed: {getattr(error, 'error_code', '') or type(error).__name__}")
+        return WebullHistoryResult(dedupe_orders(orders), synced_ranges, warnings)
+    orders = fetch_order_history_window(method, account_id, page_size, start_date, end_date, request_delay_seconds)
+    synced_ranges = [{"startDate": start_date or "", "endDate": end_date or ""}] if start_date or end_date else []
+    return WebullHistoryResult(orders, synced_ranges, [])
 
 
 def fetch_order_history_window(
@@ -382,6 +423,19 @@ def dedupe_orders(orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         unique.append(order)
     return unique
+
+
+def is_rate_limit_error(error: Exception) -> bool:
+    return getattr(error, "error_code", "") == "TOO_MANY_REQUESTS" or getattr(error, "http_status", "") == 429
+
+
+def describe_history_window_warning(start_date: str, end_date: str, error: Exception) -> str:
+    code = getattr(error, "error_code", "") or type(error).__name__
+    request_id = getattr(error, "request_id", "")
+    detail = f"Skipped Webull order history {start_date} to {end_date}: {code}"
+    if request_id:
+        detail += f" ({request_id})"
+    return detail
 
 
 def call_history_method(
