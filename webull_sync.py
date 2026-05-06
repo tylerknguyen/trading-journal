@@ -145,9 +145,11 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     raw_orders = history.orders
     rows = normalize_orders_to_csv_rows(raw_orders)
     trades = build_closed_trades_from_rows(rows)
+    account_balance = fetch_account_balance(trade_client, account_id, history.warnings)
     return {
         "source": "Webull API",
         "accountId": account_id,
+        "accountBalance": account_balance,
         "rawOrderCount": len(raw_orders),
         "startDate": config.sync_start_date,
         "endDate": config.sync_end_date,
@@ -160,6 +162,44 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         "rows": rows,
         "trades": trades,
         "syncedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def fetch_account_balance(trade_client: Any, account_id: str, warnings: list[str]) -> dict[str, Any] | None:
+    """Best-effort fetch of the live Webull account net liquidation value.
+
+    Returns {"netLiquidation": float, "currency": "USD", "fetchedAt": iso}
+    or None if the SDK call fails. Failures are noted in warnings.
+    """
+    sub = getattr(trade_client, "account_v2", None) or getattr(trade_client, "account", None)
+    if not sub:
+        return None
+    method = getattr(sub, "get_account_balance", None)
+    if not callable(method):
+        return None
+    try:
+        try:
+            response = method(account_id)
+        except TypeError:
+            response = method(account_id, "USD")
+        payload = response_json(response)
+    except Exception as error:
+        if not is_rate_limit_error(error):
+            warnings.append(f"Webull account balance fetch failed: {getattr(error, 'error_code', '') or type(error).__name__}")
+        return None
+    data = payload if isinstance(payload, dict) else (payload[0] if isinstance(payload, list) and payload else {})
+    net_liq = pick_deep(data, "total_net_liquidation_value", "totalNetLiquidationValue", "net_liquidation_value", "netLiquidationValue")
+    currency = pick_deep(data, "total_asset_currency", "totalAssetCurrency", "currency") or "USD"
+    if net_liq is None:
+        return None
+    try:
+        net_liq_value = float(str(net_liq).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    return {
+        "netLiquidation": round(net_liq_value, 2),
+        "currency": str(currency),
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
     }
 
 

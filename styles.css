@@ -2275,3 +2275,177 @@ svg.radar-svg {
     grid-template-columns: 1fr;
   }
 }
+
+/* ================================================================
+   Dark mode
+   ================================================================ */
+
+/* Hide the moon icon in light mode (default), show the sun */
+.theme-icon-moon { display: none; }
+.theme-icon-sun { display: inline; }
+
+[data-theme="dark"] .theme-icon-sun { display: none; }
+[data-theme="dark"] .theme-icon-moon { display: inline; }
+
+[data-theme="dark"] {
+  --ink: #e7e3f0;
+  --muted: #9189a1;
+  --subtle: #6f6884;
+  --line: #2a2536;
+  --soft-line: #221d2e;
+  --page: #0f0c17;
+  --panel: #181421;
+  --purple: #8478e8;
+  --purple-dark: #120825;
+  --purple-soft: #2a1f4a;
+  --green: #43c89a;
+  --green-dark: #5edab0;
+  --red: #ff7b80;
+  --red-dark: #ff8d92;
+  --blue: #7d99ff;
+  --amber: #f4a02d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="dark"] body { color-scheme: dark; }
+
+/* Sidebar */
+[data-theme="dark"] .sidebar {
+  background: var(--panel);
+  border-right-color: var(--line);
+}
+[data-theme="dark"] .nav-item { color: #8b829e; }
+[data-theme="dark"] .nav-item:hover { background: rgba(255, 255, 255, 0.04); }
+
+/* Buttons / toolbar */
+[data-theme="dark"] .primary-button,
+[data-theme="dark"] .toolbar-button,
+[data-theme="dark"] .toolbar-select,
+[data-theme="dark"] .small-button,
+[data-theme="dark"] .ghost-button {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme="dark"] .primary-button {
+  background: var(--purple);
+  border-color: var(--purple);
+  color: #fff;
+}
+[data-theme="dark"] .csv-button {
+  background: rgba(132, 120, 232, 0.12);
+  border-color: rgba(132, 120, 232, 0.4);
+  color: #b9b0ff;
+}
+[data-theme="dark"] .sync-button {
+  background: rgba(67, 200, 154, 0.1);
+  border-color: rgba(67, 200, 154, 0.4);
+  color: #5edab0;
+}
+
+/* Generic light backgrounds → panel/surface */
+[data-theme="dark"] .panel,
+[data-theme="dark"] .metric-card {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+/* Tons of hardcoded #fff backgrounds across day-cells, cards, modals */
+[data-theme="dark"] .calendar-day,
+[data-theme="dark"] .calendar-day.no-trades,
+[data-theme="dark"] .week-summary,
+[data-theme="dark"] .day-side-day,
+[data-theme="dark"] .insight-card,
+[data-theme="dark"] .progress-card,
+[data-theme="dark"] .recent-trade-row,
+[data-theme="dark"] .position-row,
+[data-theme="dark"] .journal-entry,
+[data-theme="dark"] .journal-list,
+[data-theme="dark"] .rule-row,
+[data-theme="dark"] .day-summary-card,
+[data-theme="dark"] .progress-row,
+[data-theme="dark"] .stat-row,
+[data-theme="dark"] .checklist-item,
+[data-theme="dark"] dialog,
+[data-theme="dark"] .modal-card,
+[data-theme="dark"] .filter-popup,
+[data-theme="dark"] .tooltip,
+[data-theme="dark"] .chart-tooltip,
+[data-theme="dark"] .toast,
+[data-theme="dark"] .day-modal,
+[data-theme="dark"] .trades-table tbody tr,
+[data-theme="dark"] table.trades-table {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+/* Soft purple/green/red light tints become darker tints */
+[data-theme="dark"] .calendar-day.day-win,
+[data-theme="dark"] .day-result.positive {
+  background: rgba(67, 200, 154, 0.14);
+  border-color: rgba(67, 200, 154, 0.32);
+}
+[data-theme="dark"] .calendar-day.day-loss,
+[data-theme="dark"] .day-result.negative {
+  background: rgba(255, 102, 109, 0.14);
+  border-color: rgba(255, 102, 109, 0.32);
+}
+
+/* Heatmap palette darker */
+[data-theme="dark"] .heat-1 { background: #2a3454; border-color: #344066; }
+[data-theme="dark"] .heat-2 { background: #354270; border-color: #45528b; }
+[data-theme="dark"] .heat-3 { background: #485ba1; border-color: #5b6fc2; }
+[data-theme="dark"] .heat-4 { background: #6677d9; border-color: #7c8fec; }
+[data-theme="dark"] .heat-loss { background: #4a262b; border-color: #6a3138; }
+
+/* Inputs / selects in modals */
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="search"],
+[data-theme="dark"] input[type="email"],
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background: #1f1a2b;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: var(--subtle); }
+
+/* Chart axes / gridlines */
+[data-theme="dark"] .axis-label { fill: var(--muted); }
+[data-theme="dark"] .grid-line { stroke: var(--line); }
+[data-theme="dark"] .zero-line { stroke: var(--muted); }
+[data-theme="dark"] .chart-svg text { fill: var(--ink); }
+
+/* Tables */
+[data-theme="dark"] th,
+[data-theme="dark"] td {
+  border-color: var(--line);
+}
+[data-theme="dark"] thead { background: #1d182a; }
+
+/* Tabs / pills */
+[data-theme="dark"] .tab {
+  background: transparent;
+  color: var(--muted);
+}
+[data-theme="dark"] .tab.active {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+/* Scrollbar polish (optional, browsers vary) */
+[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+[data-theme="dark"] ::-webkit-scrollbar-track { background: #100c18; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #2c2440;
+  border-radius: 6px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #3a3155; }
+
+/* Make clickable Daily P&L bars feel interactive */
+.chart-bar-clickable { cursor: pointer; }
+.chart-bar-clickable:hover { opacity: 0.85; }

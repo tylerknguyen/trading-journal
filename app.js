@@ -4,6 +4,18 @@ const DATA_KEY = "tradezella_local_trades_v1";
 const META_KEY = "tradezella_local_import_meta_v1";
 const RULES_KEY = "trading_journal_rules_v1";
 const WEBULL_SYNC_COOLDOWN_KEY = "trading_journal_webull_sync_cooldown_until_v1";
+const THEME_KEY = "trading_journal_theme_v1";
+
+(function applyInitialTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const theme = stored || (prefersDark ? "dark" : "light");
+    document.documentElement.dataset.theme = theme;
+  } catch {
+    document.documentElement.dataset.theme = "light";
+  }
+})();
 
 const defaultRules = {
   tradingDays: [1, 2, 3, 4, 5],
@@ -356,6 +368,8 @@ function normalizeExecutions(rawExecutions, fallback) {
 function bindEvents() {
   els.csvInput.addEventListener("change", handleCsvUpload);
   els.syncWebullButton.addEventListener("click", syncWebull);
+  const themeToggle = document.querySelector("#themeToggle");
+  if (themeToggle) themeToggle.addEventListener("click", toggleTheme);
   els.dateRange.addEventListener("change", render);
   els.navItems.forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
@@ -723,6 +737,7 @@ async function syncWebull() {
       syncEndDate: payload.endDate || "",
       syncedDateRanges: payload.syncedDateRanges || [],
       warnings: payload.warnings || [],
+      accountBalance: payload.accountBalance || state.importMeta?.accountBalance || null,
       reconcilerVersion: 4,
     });
     renderImportMeta();
@@ -748,6 +763,12 @@ async function syncWebull() {
 function setSyncStatus(message, tone = "") {
   els.syncStatus.className = `sync-status ${tone}`.trim();
   els.syncStatus.innerHTML = message ? `<strong>Sync:</strong> ${escapeHtml(message)}` : "";
+}
+
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem(THEME_KEY, next); } catch {}
 }
 
 function webullSyncFailureMessage(message) {
@@ -1092,7 +1113,9 @@ function render() {
   renderLineChart(els.cumulativeChart, buildCumulativeSeries(daily), { mode: "cumulative", color: "#8f82d9", fill: "red" });
   renderBarChart(els.dailyBars, daily);
   renderTradesTable();
-  renderLineChart(els.accountChart, buildAccountSeries(daily), { mode: "account", color: "#8f82d9", redLine: STARTING_BALANCE });
+  const accountSeries = buildAccountSeries(daily);
+  const accountBaseline = accountSeries.startingBalance ?? STARTING_BALANCE;
+  renderLineChart(els.accountChart, accountSeries.points, { mode: "account", color: "#8f82d9", redLine: accountBaseline });
   renderCalendar(daily);
   renderLineChart(els.drawdownChart, buildDrawdownSeries(daily), { mode: "drawdown", color: "#8f82d9", fill: "red" });
   renderScatter(els.timeScatter, closedTrades, "time");
@@ -1261,24 +1284,31 @@ function renderCalendar(daily) {
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   let html = weekdays.map((day) => `<div class="weekday">${day}</div>`).join("") + `<div class="weekday">Week</div>`;
   const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
   const gridStart = new Date(first);
   gridStart.setDate(first.getDate() - first.getDay());
+  const totalDays = first.getDay() + last.getDate();
+  const weekCount = Math.ceil(totalDays / 7);
 
-  for (let week = 0; week < 6; week++) {
+  for (let week = 0; week < weekCount; week++) {
     const weekTrades = [];
     for (let day = 0; day < 7; day++) {
       const date = new Date(gridStart);
       date.setDate(gridStart.getDate() + week * 7 + day);
+      const isCurrentMonth = date.getMonth() === month && date.getFullYear() === year;
+      if (!isCurrentMonth) {
+        html += `<div class="calendar-day calendar-day-blank" aria-hidden="true"></div>`;
+        continue;
+      }
       const key = toDateKey(date);
       const info = daily[key] || { pnl: 0, trades: [] };
       weekTrades.push(...info.trades);
-      const isCurrentMonth = date.getMonth() === month;
       const resultClass = info.pnl > 0 ? "day-win" : info.pnl < 0 ? "day-loss" : "";
       const result = info.trades.length ? `<div class="day-result ${info.pnl >= 0 ? "positive" : "negative"}">
           <strong>${money(info.pnl)}</strong>
           <span>${info.trades.length} trades</span>
         </div>` : "";
-      html += `<button type="button" class="calendar-day ${isCurrentMonth ? "" : "muted"} ${resultClass} ${info.trades.length ? "" : "no-trades"}" data-date="${key}" ${info.trades.length ? "" : "disabled"}>
+      html += `<button type="button" class="calendar-day ${resultClass} ${info.trades.length ? "" : "no-trades"}" data-date="${key}" ${info.trades.length ? "" : "disabled"}>
         <span class="day-number">${date.getDate()}</span>
         ${result}
       </button>`;
@@ -2062,11 +2092,15 @@ function renderBarChart(container, daily) {
       const barWidth = Math.max(3, xStep - 2);
       const barY = point.value >= 0 ? y(point.value) : zero;
       const barH = Math.max(1, Math.abs(y(point.value) - zero));
-      return `<rect class="${point.value >= 0 ? "bar-positive" : "bar-negative"} chart-hit-fill" x="${barX}" y="${barY}" width="${barWidth}" height="${barH}" rx="1" data-chart-tip="${escapeHtml(`${formatChartDate(point.date)}: ${money(point.value)}`)}"/>`;
+      const hasTrades = (daily[point.date]?.trades?.length || 0) > 0;
+      return `<rect class="${point.value >= 0 ? "bar-positive" : "bar-negative"} chart-hit-fill${hasTrades ? " chart-bar-clickable" : ""}" x="${barX}" y="${barY}" width="${barWidth}" height="${barH}" rx="1" data-chart-tip="${escapeHtml(`${formatChartDate(point.date)}: ${money(point.value)}`)}"${hasTrades ? ` data-day="${point.date}"` : ""}/>`;
     }).join("")}
     ${xTicks.map((tick) => `<text class="axis-label" x="${pad.left + tick.index * xStep}" y="${height - 8}" text-anchor="${chartAnchor(tick.index, series.length - 1)}">${formatChartDate(tick.date)}</text>`).join("")}
   </svg>`;
   attachChartTooltip(container);
+  container.querySelectorAll("[data-day]").forEach((bar) => {
+    bar.addEventListener("click", () => openDayDialog(bar.dataset.day));
+  });
 }
 
 function renderScatter(container, trades, mode) {
@@ -2243,11 +2277,21 @@ function buildCumulativeSeries(daily) {
 }
 
 function buildAccountSeries(daily) {
-  let running = STARTING_BALANCE;
-  return Object.keys(daily).sort().map((date) => {
+  // If we have a live account balance from the most recent Webull sync, anchor
+  // the chart there: starting_balance = current_balance - sum(all trade pnl).
+  // Otherwise fall back to the legacy STARTING_BALANCE constant.
+  const liveBalance = Number(state.importMeta?.accountBalance?.netLiquidation);
+  const sortedDates = Object.keys(daily).sort();
+  const totalPnl = sortedDates.reduce((sum, date) => sum + daily[date].pnl, 0);
+  const startingBalance = Number.isFinite(liveBalance)
+    ? roundCurrency(liveBalance - totalPnl)
+    : STARTING_BALANCE;
+  let running = startingBalance;
+  const points = sortedDates.map((date) => {
     running = roundCurrency(running + daily[date].pnl);
     return { date, value: running };
   });
+  return { startingBalance, points };
 }
 
 function buildDrawdownSeries(daily) {
