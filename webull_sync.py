@@ -391,9 +391,19 @@ def fetch_order_history_window(
     # Webull's OpenAPI gateway returns OAUTH_OPENAPI_SYSTEM_ERROR (HTTP 417)
     # for any cursor-paginated follow-up call (with or without dates), so we
     # rely on a large page_size to fit each chunk in a single request and skip
-    # pagination entirely. A WebullPageSizeCapHit warning is raised upstream
-    # if a chunk fills the page exactly, signalling possible truncation.
-    response = call_history_method(method, account_id, page_size, None, None, start_date, end_date)
+    # pagination entirely. A truncation warning is raised upstream if a chunk
+    # fills the page exactly.
+    #
+    # Webull also treats end_date as EXCLUSIVE (filled_at < end_date 00:00),
+    # so trades on the requested last day get silently dropped. Send +1 day
+    # to make the window inclusive; dedupe in the caller handles overlap.
+    api_end_date = end_date
+    if end_date:
+        try:
+            api_end_date = (parse_date_key(end_date) + timedelta(days=1)).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    response = call_history_method(method, account_id, page_size, None, None, start_date, api_end_date)
     payload = response_json(response)
     return extract_list(payload)
 
