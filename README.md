@@ -25,6 +25,42 @@ The app runs on your own computer. Trades and journal entries are stored in your
 
 The launcher creates a local `.venv`, installs dependencies, starts the server, and opens the app. Leave the launcher window open while using the app. Press `Ctrl+C` in that window to stop it.
 
+## Firebase Hosting
+
+The frontend can be hosted on Firebase Hosting as a static app. Static hosting supports CSV upload, charts, calendar views, journaling, and local browser storage.
+
+Webull API sync is not available from Firebase Hosting alone because broker API keys require a secure backend. For hosted Webull sync, add Firebase Functions or another backend service later.
+
+To deploy the static frontend:
+
+1. Install the Firebase CLI:
+
+```powershell
+npm install -g firebase-tools
+```
+
+2. Log in:
+
+```powershell
+firebase login
+```
+
+3. Create a Firebase project in the Firebase console.
+
+4. Copy `.firebaserc.example` to `.firebaserc` and replace `your-firebase-project-id` with your project ID.
+
+```powershell
+copy .firebaserc.example .firebaserc
+```
+
+5. Deploy:
+
+```powershell
+firebase deploy --only hosting
+```
+
+The included `firebase.json` deploys only the static frontend files and excludes `.env`, logs, local SDK token cache, virtualenv files, and the Python Webull backend.
+
 ## Manual Setup
 
 Python 3.10 or 3.11 is recommended.

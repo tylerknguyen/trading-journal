@@ -1149,7 +1149,7 @@ function renderCalendar(daily) {
   const monthPnl = sum(monthTrades.map((trade) => trade.netPnl));
   const monthDays = groupByDate(monthTrades);
   const dayCount = Object.keys(monthDays).length;
-  els.monthlyStats.innerHTML = `Monthly stats: <b>${money(monthPnl)}</b> <span>${dayCount} days</span>`;
+  els.monthlyStats.innerHTML = `Monthly stats: <b class="${monthPnl >= 0 ? "positive" : "negative"}">${money(monthPnl)}</b> <span>${dayCount} days</span>`;
 
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   let html = weekdays.map((day) => `<div class="weekday">${day}</div>`).join("") + `<div class="weekday">Week</div>`;
@@ -1902,6 +1902,11 @@ function renderLineChart(container, series, options = {}) {
   const area = `${pad.left},${y(0)} ${line} ${x(series.length - 1)},${y(0)}`;
   const yTicks = makeTicks(min, max, 5);
   const xTicks = makeDateTicks(series, 4);
+  const hitPoints = series.map((point, index) => ({
+    cx: x(index),
+    cy: y(point.value),
+    tip: `${point.date ? formatChartDate(point.date) : point.label || "Point"}: ${money(point.value)}`,
+  }));
 
   container.innerHTML = `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${options.mode || "line"} chart">
     <defs>
@@ -1916,8 +1921,10 @@ function renderLineChart(container, series, options = {}) {
     ${options.fill ? `<polygon points="${area}" class="area-red"/>` : ""}
     ${options.redLine !== undefined ? `<line class="line-red" x1="${pad.left}" y1="${y(options.redLine)}" x2="${width - pad.right}" y2="${y(options.redLine)}"/>` : ""}
     <polyline points="${line}" class="line-purple"/>
+    ${hitPoints.map((point) => `<circle class="chart-hit" cx="${point.cx}" cy="${point.cy}" r="8" data-chart-tip="${escapeHtml(point.tip)}"/>`).join("")}
     ${xTicks.map((tick) => `<text class="axis-label" x="${x(tick.index)}" y="${height - 8}" text-anchor="${chartAnchor(tick.index, series.length - 1)}">${formatChartDate(tick.date)}</text>`).join("")}
   </svg>`;
+  attachChartTooltip(container);
 }
 
 function renderBarChart(container, daily) {
@@ -1948,10 +1955,11 @@ function renderBarChart(container, daily) {
       const barWidth = Math.max(3, xStep - 2);
       const barY = point.value >= 0 ? y(point.value) : zero;
       const barH = Math.max(1, Math.abs(y(point.value) - zero));
-      return `<rect class="${point.value >= 0 ? "bar-positive" : "bar-negative"}" x="${barX}" y="${barY}" width="${barWidth}" height="${barH}" rx="1"/>`;
+      return `<rect class="${point.value >= 0 ? "bar-positive" : "bar-negative"} chart-hit-fill" x="${barX}" y="${barY}" width="${barWidth}" height="${barH}" rx="1" data-chart-tip="${escapeHtml(`${formatChartDate(point.date)}: ${money(point.value)}`)}"/>`;
     }).join("")}
     ${xTicks.map((tick) => `<text class="axis-label" x="${pad.left + tick.index * xStep}" y="${height - 8}" text-anchor="${chartAnchor(tick.index, series.length - 1)}">${formatChartDate(tick.date)}</text>`).join("")}
   </svg>`;
+  attachChartTooltip(container);
 }
 
 function renderScatter(container, trades, mode) {
@@ -1984,9 +1992,46 @@ function renderScatter(container, trades, mode) {
     ${yTicks.map((tick) => `<line class="grid-line" x1="${pad.left}" y1="${y(tick)}" x2="${width - pad.right}" y2="${y(tick)}"/>
       <text class="axis-label" x="${pad.left - 8}" y="${y(tick) + 3}" text-anchor="end">${moneyCompact(tick)}</text>`).join("")}
     <line class="zero-line" x1="${pad.left}" y1="${y(0)}" x2="${width - pad.right}" y2="${y(0)}"/>
-    ${points.map((point) => `<circle class="${point.pnl >= 0 ? "dot-green" : "dot-red"}" cx="${x(point.x)}" cy="${y(point.y)}" r="3" opacity=".9"/>`).join("")}
+    ${points.map((point) => `<circle class="${point.pnl >= 0 ? "dot-green" : "dot-red"}" cx="${x(point.x)}" cy="${y(point.y)}" r="3" opacity=".9"/>
+      <circle class="chart-hit" cx="${x(point.x)}" cy="${y(point.y)}" r="8" data-chart-tip="${escapeHtml(`${mode === "time" ? minutesToTime(point.x) : durationLabel(point.x)}: ${money(point.y)}`)}"/>`).join("")}
     ${xTicks.map((tick) => `<text class="axis-label" x="${x(tick)}" y="${height - 8}" text-anchor="middle">${mode === "time" ? minutesToTime(tick) : durationLabel(tick)}</text>`).join("")}
   </svg>`;
+  attachChartTooltip(container);
+}
+
+function attachChartTooltip(container) {
+  const targets = container.querySelectorAll("[data-chart-tip]");
+  if (!targets.length) return;
+  const tooltip = getChartTooltip();
+  const show = (event) => {
+    const target = event.currentTarget;
+    tooltip.textContent = target.dataset.chartTip || "";
+    tooltip.classList.add("show");
+    move(event);
+  };
+  const move = (event) => {
+    const offset = 14;
+    tooltip.style.left = `${event.clientX + offset}px`;
+    tooltip.style.top = `${event.clientY + offset}px`;
+  };
+  const hide = () => tooltip.classList.remove("show");
+  targets.forEach((target) => {
+    target.addEventListener("pointerenter", show);
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerleave", hide);
+    target.addEventListener("click", show);
+  });
+}
+
+function getChartTooltip() {
+  let tooltip = document.querySelector("#chartTooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.id = "chartTooltip";
+    tooltip.className = "chart-tooltip";
+    document.body.appendChild(tooltip);
+  }
+  return tooltip;
 }
 
 function renderMiniGauge(container, value) {

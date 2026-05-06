@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+.firebaserc
 .venv/
 __pycache__/
 *.pyc

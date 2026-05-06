@@ -1,0 +1,40 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      ".env",
+      ".env.*",
+      "conf/**",
+      ".venv/**",
+      "__pycache__/**",
+      "*.pyc",
+      "*.log",
+      "*.log.*",
+      ".git/**",
+      "server.py",
+      "webull_sync.py",
+      "requirements.txt",
+      "*-screenshot.png",
+      "smoke-*.png"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
