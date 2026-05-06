@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+edge-profile*/
+server.out.log
+server.err.log
+*.log
+*.log.*
+conf/
+*-screenshot.png
+smoke-*.png

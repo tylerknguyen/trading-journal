@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trading Journal Portfolio Tracker</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <button class="icon-button menu-button" aria-label="Menu">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <div class="brand-mark" aria-hidden="true">
+            <span class="brand-orbit"></span>
+            <span class="brand-core"></span>
+          </div>
+          <div class="brand-word">TRADING JOURNAL</div>
+        </div>
+        <div class="topbar-actions">
+          <button class="topbar-icon alert-dot" aria-label="Notifications">!</button>
+          <button class="topbar-icon" aria-label="Account">A</button>
+        </div>
+      </header>
+
+      <aside class="sidebar" aria-label="Primary navigation">
+        <button class="nav-item active" title="Dashboard" aria-label="Dashboard" data-view="dashboard">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v7H4zM13 5h7v4h-7zM13 11h7v8h-7zM4 14h7v5H4z"/></svg>
+        </button>
+        <button class="nav-item" title="Day View" aria-label="Day View" data-view="day">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18h14v2H5zM6 4h3v12H6zM11 9h3v7h-3zM16 6h3v10h-3z"/></svg>
+        </button>
+        <button class="nav-item" title="Progress" aria-label="Progress" data-view="progress">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4v7H4zM10 9h4v11h-4zM16 4h4v16h-4zM4 4h9v3H4z"/></svg>
+        </button>
+        <button class="nav-item" title="Journal" aria-label="Journal" data-view="journal">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v16H7a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2Zm1 14h10V5H7Zm0 2v.01L17 19v-1H7Z"/></svg>
+        </button>
+        <button class="nav-item" title="Trade Detail" aria-label="Trade Detail" data-view="trade">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h2v3H7zM15 2h2v3h-2zM4 6h16v15H4zm2 5v8h12v-8z"/></svg>
+        </button>
+        <button class="nav-item" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm8.5 4a7.8 7.8 0 0 0-.2-1.6l2-1.5-2-3.5-2.4 1a8.7 8.7 0 0 0-1.4-.8L16.2 3h-4l-.4 2.6c-.5.2-1 .5-1.4.8l-2.4-1-2 3.5 2 1.5A7.8 7.8 0 0 0 7.8 12c0 .5.1 1.1.2 1.6l-2 1.5 2 3.5 2.4-1c.4.3.9.6 1.4.8l.4 2.6h4l.4-2.6c.5-.2 1-.5 1.4-.8l2.4 1 2-3.5-2-1.5c.1-.5.2-1.1.2-1.6Z"/></svg>
+        </button>
+      </aside>
+
+      <main class="dashboard">
+        <section id="dashboardView" class="app-view active-view">
+          <div class="dashboard-header">
+          <div>
+            <h1>Dashboard</h1>
+            <p id="lastImport">Last import: sample data</p>
+          </div>
+          <div class="control-row">
+            <label class="csv-button">
+              <input id="csvInput" type="file" accept=".csv,text/csv" />
+              Upload CSV
+            </label>
+            <button id="syncWebullButton" class="sync-button" type="button">Sync Webull</button>
+            <button id="startDayButton" class="primary-button">Start my day</button>
+            <button id="filterButton" class="toolbar-button">Filters</button>
+            <select id="dateRange" class="toolbar-select" aria-label="Date range">
+              <option value="all">All time</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="month">This month</option>
+            </select>
+            <select id="brokerSelect" class="toolbar-select" aria-label="Broker">
+              <option>Webull</option>
+              <option>Manual CSV</option>
+              <option>Paper</option>
+            </select>
+          </div>
+          </div>
+          <div id="syncStatus" class="sync-status" role="status" aria-live="polite"></div>
+
+          <section class="metrics-grid" aria-label="Summary metrics">
+          <article class="metric-card">
+            <div class="metric-label">Net P&L <span title="Realized net profit and loss">?</span></div>
+            <div id="netPnl" class="metric-value negative">-$5,916</div>
+            <button class="micro-action" aria-label="Open P&L details">↗</button>
+          </article>
+          <article class="metric-card gauge-card">
+            <div>
+              <div class="metric-label">Trade win % <span title="Winning closed trades divided by total trades">?</span></div>
+              <div id="tradeWin" class="metric-value">39.90%</div>
+            </div>
+            <div id="tradeWinGauge" class="mini-gauge"></div>
+          </article>
+          <article class="metric-card gauge-card">
+            <div>
+              <div class="metric-label">Profit factor <span title="Gross wins divided by gross losses">?</span></div>
+              <div id="profitFactor" class="metric-value">0.60</div>
+            </div>
+            <div id="profitGauge" class="donut-gauge"></div>
+          </article>
+          <article class="metric-card gauge-card">
+            <div>
+              <div class="metric-label">Day win % <span title="Profitable trading days divided by total trading days">?</span></div>
+              <div id="dayWin" class="metric-value">44.29%</div>
+            </div>
+            <div id="dayWinGauge" class="mini-gauge"></div>
+          </article>
+          <article class="metric-card range-card">
+            <div class="metric-label">Avg win/loss trade <span title="Average winning trade compared to average losing trade">?</span></div>
+            <div id="winLossRatio" class="metric-value">0.91</div>
+            <div class="range-track">
+              <span id="avgWinLabel">$114</span>
+              <div class="range-fill">
+                <i id="avgWinBar"></i>
+                <b id="avgLossBar"></b>
+              </div>
+              <span id="avgLossLabel">-$126</span>
+            </div>
+          </article>
+          </section>
+
+          <section class="grid dashboard-grid">
+          <article class="panel zella-panel">
+            <div class="panel-heading">
+              <h2>Performance score</h2>
+              <span title="Composite consistency and risk score">?</span>
+            </div>
+            <div class="zella-body">
+              <div id="radarChart" class="radar-chart"></div>
+              <div class="zella-score">
+                <span>Your Performance Score</span>
+                <strong id="zellaScore">20.9</strong>
+                <div class="score-scale"><i id="scoreMarker"></i></div>
+                <div class="score-ticks"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel progress-panel">
+            <div class="panel-heading">
+              <h2>Progress tracker</h2>
+              <button id="viewMoreProgress" class="link-button">View more</button>
+            </div>
+            <div id="progressHeatmap" class="heatmap"></div>
+            <div class="heatmap-footer">
+              <span>Less</span>
+              <i></i><i></i><i></i><i></i><i></i>
+              <span>More</span>
+            </div>
+            <div class="daily-checklist">
+              <div><span>Today's score</span><strong id="todayScore">2/5</strong></div>
+              <div class="check-progress"><span id="todayScoreBar"></span></div>
+              <button id="dailyChecklistButton" class="small-button">Daily checklist</button>
+            </div>
+          </article>
+
+          <article class="panel cumulative-panel">
+            <div class="panel-heading">
+              <h2>Daily net cumulative P&L</h2>
+              <span title="Running total of net P&L by close date">?</span>
+            </div>
+            <div id="cumulativeChart" class="chart-area"></div>
+          </article>
+
+          <article class="panel netdaily-panel">
+            <div class="panel-heading">
+              <h2>Net daily P&L</h2>
+              <span title="Net P&L grouped by close date">?</span>
+            </div>
+            <div id="dailyBars" class="chart-area bar-area"></div>
+          </article>
+
+          <article class="panel trades-panel">
+            <div class="tabs">
+              <button class="tab active" data-tab="recent">Recent trades</button>
+              <button class="tab" data-tab="open">Open positions</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Close Date</th>
+                    <th>Symbol</th>
+                    <th>Net P&L</th>
+                    <th>Journal</th>
+                  </tr>
+                </thead>
+                <tbody id="tradesTable"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel account-panel">
+            <div class="panel-heading">
+              <h2>Account balance</h2>
+              <span title="Starting balance plus cumulative closed P&L">?</span>
+            </div>
+            <div class="chart-legend">
+              <span><i class="legend-purple"></i> Account balance</span>
+              <span><i class="legend-red"></i> Deposits / Withdrawals</span>
+            </div>
+            <div id="accountChart" class="chart-area"></div>
+          </article>
+
+          <article class="panel calendar-panel">
+            <div class="calendar-toolbar">
+              <button id="prevMonth" class="icon-nav" aria-label="Previous month">‹</button>
+              <strong id="monthLabel">May 2026</strong>
+              <button id="nextMonth" class="icon-nav" aria-label="Next month">›</button>
+              <button id="thisMonth" class="small-button">This month</button>
+              <div id="monthlyStats" class="monthly-stats"></div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+          </article>
+
+          <article class="panel drawdown-panel">
+            <div class="panel-heading">
+              <h2>Drawdown</h2>
+              <span title="Peak-to-trough decline of cumulative P&L">?</span>
+            </div>
+            <div id="drawdownChart" class="chart-area"></div>
+          </article>
+
+          <article class="panel time-panel">
+            <div class="panel-heading">
+              <h2>Trade time performance</h2>
+              <div class="panel-icons"><span>⚙</span><span>⊙</span></div>
+            </div>
+            <div id="timeScatter" class="chart-area scatter-area"></div>
+          </article>
+
+          <article class="panel duration-panel">
+            <div class="panel-heading">
+              <h2>Trade duration performance</h2>
+              <span title="P&L by duration held">?</span>
+            </div>
+            <div id="durationScatter" class="chart-area scatter-area"></div>
+          </article>
+          </section>
+        </section>
+
+        <section id="dayView" class="app-view day-view" hidden>
+          <div class="screen-header">
+            <div>
+              <h1>Day View</h1>
+              <p>Daily P&L, trades, executions, and review actions.</p>
+            </div>
+            <div class="control-row">
+              <button id="dayStartButton" class="primary-button" type="button">Start my day</button>
+              <button id="dayRulesButton" class="toolbar-button" type="button">Rules</button>
+            </div>
+          </div>
+          <div class="day-page-layout">
+            <div id="dayCards" class="day-cards"></div>
+            <aside class="day-sidebar-panel">
+              <div class="mini-month-card">
+                <div class="mini-month-head">
+                  <strong id="daySideMonth">May 2026</strong>
+                  <button id="dayTodayButton" class="small-button" type="button">Today</button>
+                </div>
+                <div id="daySideCalendar" class="side-calendar"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section id="progressView" class="app-view progress-page" hidden>
+          <div class="screen-header">
+            <div>
+              <h1>Progress Tracker</h1>
+              <p>Trading rules, streaks, daily checklist, and habit scoring.</p>
+            </div>
+            <div class="control-row">
+              <button id="progressTodayButton" class="toolbar-button" type="button">Today</button>
+              <button id="editRulesButton" class="primary-button" type="button">Edit rules</button>
+            </div>
+          </div>
+          <div class="progress-layout">
+            <aside class="progress-summary">
+              <article class="progress-card">
+                <span>Current streak</span>
+                <strong id="currentStreak">0 days</strong>
+              </article>
+              <article class="progress-card gauge-block">
+                <span>Current period score</span>
+                <div id="periodGauge" class="progress-gauge"></div>
+                <strong id="periodScore">0%</strong>
+              </article>
+              <article class="progress-card">
+                <span>Today's progress</span>
+                <strong id="progressTodayScore">0/5</strong>
+                <div class="check-progress"><span id="progressTodayBar"></span></div>
+              </article>
+            </aside>
+            <article class="panel checklist-panel">
+              <div class="panel-heading">
+                <h2 id="dailyChecklistTitle">Daily checklist</h2>
+                <span title="Rules checked against today's trades">?</span>
+              </div>
+              <div id="progressChecklist" class="progress-checklist"></div>
+              <button id="viewProgressDayButton" class="primary-button" type="button">View this day</button>
+            </article>
+            <article class="panel progress-heatmap-panel">
+              <div class="panel-heading">
+                <h2>Progress tracker</h2>
+                <span title="Daily rule and P&L activity">?</span>
+              </div>
+              <div id="progressPageHeatmap" class="heatmap heatmap-wide"></div>
+              <div class="heatmap-footer">
+                <span>Less</span>
+                <i></i><i></i><i></i><i></i><i></i>
+                <span>More</span>
+              </div>
+            </article>
+          </div>
+          <article class="panel rules-table-panel">
+            <div class="panel-heading">
+              <h2>Current rules</h2>
+              <button id="editRulesTableButton" class="small-button" type="button">Edit rules</button>
+            </div>
+            <div class="table-wrap">
+              <table class="rules-table">
+                <thead>
+                  <tr>
+                    <th>Rule</th>
+                    <th>Condition</th>
+                    <th>Rule streak</th>
+                    <th>Average performance</th>
+                    <th>Follow rate</th>
+                  </tr>
+                </thead>
+                <tbody id="rulesTable"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="tradeView" class="app-view trade-page" hidden>
+          <div class="trade-shell">
+            <aside class="trade-list-panel">
+              <div class="trade-day-title">
+                <h1 id="tradePageDate">Trade Detail</h1>
+                <p id="tradePageDayStats">Select a trade</p>
+              </div>
+              <div id="tradePageList" class="trade-page-list"></div>
+            </aside>
+            <section class="trade-main-panel">
+              <div class="trade-topline">
+                <div>
+                  <button id="tradeBackButton" class="toolbar-button" type="button">Back</button>
+                  <strong id="tradeDetailTitle">SPY</strong>
+                  <span id="tradeDetailSubtitle"></span>
+                </div>
+                <div class="trade-actions">
+                  <button id="markReviewedButton" class="toolbar-button" type="button">Mark reviewed</button>
+                  <button id="tradeJournalButton" class="primary-button" type="button">Add note</button>
+                </div>
+              </div>
+              <div class="trade-detail-layout">
+                <aside class="trade-stat-panel">
+                  <div id="tradeStatsCard" class="trade-stats-card"></div>
+                </aside>
+                <div class="trade-workspace">
+                  <div class="trade-tabs">
+                    <button class="tab active" data-trade-tab="chart" type="button">Chart</button>
+                    <button class="tab" data-trade-tab="executions" type="button">Executions</button>
+                    <button class="tab" data-trade-tab="notes" type="button">Notes</button>
+                    <button class="tab" data-trade-tab="running" type="button">Running P&L</button>
+                  </div>
+                  <div id="tradeChartPane" class="trade-pane active">
+                    <div class="chart-toolbar">
+                      <span>1m</span><span>5m</span><span>15m</span><span>1h</span><span>D</span>
+                      <b id="tradeChartLabel">TradingView chart</b>
+                    </div>
+                    <iframe id="tradingViewFrame" class="tradingview-frame" title="TradingView chart"></iframe>
+                    <div id="executionOverlay" class="execution-overlay-list"></div>
+                  </div>
+                  <div id="tradeExecutionsPane" class="trade-pane" hidden>
+                    <table class="executions-table">
+                      <thead>
+                        <tr><th>Time</th><th>Role</th><th>Side</th><th>Qty</th><th>Price</th><th>P&L</th></tr>
+                      </thead>
+                      <tbody id="executionsTable"></tbody>
+                    </table>
+                  </div>
+                  <div id="tradeNotesPane" class="trade-pane" hidden>
+                    <div id="tradeInlineNotes" class="trade-inline-notes"></div>
+                  </div>
+                  <div id="tradeRunningPane" class="trade-pane" hidden>
+                    <div id="tradeRunningChart" class="chart-area"></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="journalView" class="app-view journal-page" hidden>
+          <div class="journal-page-header">
+            <div>
+              <h1>Journal</h1>
+              <p>All trades, journal status, saved notes, and review workflow.</p>
+            </div>
+            <div class="journal-controls">
+              <input id="journalSearch" type="search" placeholder="Search symbol, setup, notes..." />
+              <select id="journalFilter" aria-label="Journal filter">
+                <option value="all">All trades</option>
+                <option value="journaled">Journaled</option>
+                <option value="missing">Needs journal</option>
+                <option value="wins">Winners</option>
+                <option value="losses">Losers</option>
+              </select>
+            </div>
+          </div>
+
+          <section class="journal-summary-grid">
+            <article class="journal-summary-card">
+              <span>Total trades</span>
+              <strong id="journalTotalTrades">0</strong>
+            </article>
+            <article class="journal-summary-card">
+              <span>Journaled</span>
+              <strong id="journaledTrades">0</strong>
+            </article>
+            <article class="journal-summary-card">
+              <span>Needs review</span>
+              <strong id="journalMissingTrades">0</strong>
+            </article>
+            <article class="journal-summary-card">
+              <span>Journaled P&L</span>
+              <strong id="journaledPnl">$0</strong>
+            </article>
+          </section>
+
+          <article class="panel journal-list-panel">
+            <div class="panel-heading">
+              <h2>Trade journal</h2>
+              <span title="Click any row to edit that trade journal">?</span>
+            </div>
+            <div class="journal-table-wrap">
+              <table class="journal-table">
+                <thead>
+                  <tr>
+                    <th>Close Date</th>
+                    <th>Instrument</th>
+                    <th>Side</th>
+                    <th>Net P&L</th>
+                    <th>Strategy</th>
+                    <th>Emotion</th>
+                    <th>Notes</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="journalTable"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="dayDialog" class="day-dialog">
+      <form method="dialog" class="day-card">
+        <header>
+          <div>
+            <h2 id="dayDialogTitle">Monday, May 04, 2026</h2>
+            <span id="dayDialogPnl">Net P&L $0</span>
+          </div>
+          <button class="icon-close" value="cancel" aria-label="Close">x</button>
+        </header>
+        <div class="day-overview">
+          <div id="dayMiniChart" class="day-mini-chart"></div>
+          <div class="day-stat"><span>Total Trades</span><strong id="dayTradeCount">0</strong></div>
+          <div class="day-stat"><span>Gross P&L</span><strong id="dayGrossPnl">$0</strong></div>
+          <div class="day-stat"><span>Winners / Losers</span><strong id="dayWinLoss">0 / 0</strong></div>
+          <div class="day-stat"><span>Commissions</span><strong id="dayCommissions">$0</strong></div>
+          <div class="day-stat"><span>Win Rate</span><strong id="dayDialogWinRate">0%</strong></div>
+          <div class="day-stat"><span>Volume</span><strong id="dayVolume">0</strong></div>
+          <div class="day-stat"><span>Profit Factor</span><strong id="dayDialogProfitFactor">0.00</strong></div>
+        </div>
+        <div class="day-table-wrap">
+          <table class="day-table">
+            <thead>
+              <tr>
+                <th>Select</th>
+                <th>Open time</th>
+                <th>Instrument</th>
+                <th>Side</th>
+                <th>Ticker</th>
+                <th>Net P&L</th>
+                <th>Strategy</th>
+                <th>Journal</th>
+              </tr>
+            </thead>
+            <tbody id="dayTradeRows"></tbody>
+          </table>
+        </div>
+        <footer>
+          <button class="ghost-button" value="cancel">Cancel</button>
+          <div class="dialog-actions">
+            <button id="journalSelectedTrade" class="toolbar-button" type="button">Journal selected</button>
+            <button id="dayInsightsButton" class="toolbar-button" type="button">AI insights</button>
+            <button id="viewDayDetails" class="primary-button" type="button">View Details</button>
+          </div>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="insightsDialog" class="insights-dialog">
+      <form method="dialog" class="insights-card">
+        <button class="icon-close" value="cancel" aria-label="Close">x</button>
+        <header>
+          <div class="insight-orb" aria-hidden="true">AI</div>
+          <h2>Daily AI Insights</h2>
+          <p>
+            <span id="insightDate">Mon, May 04, 2026</span>
+            <span id="insightPnl">Net P&L $0</span>
+            <span id="insightTrades">Total Trades 0</span>
+          </p>
+        </header>
+        <div id="insightsList" class="insights-list"></div>
+      </form>
+    </dialog>
+
+    <dialog id="rulesDialog" class="rules-dialog">
+      <form method="dialog" class="rules-card">
+        <header>
+          <div>
+            <h2>Rules</h2>
+            <p>Changes apply to today and future scoring.</p>
+          </div>
+          <button class="icon-close" value="cancel" aria-label="Close">x</button>
+        </header>
+        <section class="rules-form">
+          <div class="rules-row">
+            <div>
+              <strong>Trading days</strong>
+              <span>The days on which these rules should be active.</span>
+            </div>
+            <div class="weekday-pills" id="ruleTradingDays"></div>
+          </div>
+          <label class="rules-row switch-row">
+            <input id="ruleEmailReminder" type="checkbox" />
+            <div>
+              <strong>Send an email reminder when I'm about to lose my streak</strong>
+              <span>Local reminder setting for future automation.</span>
+            </div>
+            <input id="ruleReminderTime" type="time" />
+          </label>
+          <label class="rules-row switch-row">
+            <input id="ruleStartDay" type="checkbox" />
+            <div>
+              <strong>Start my day by</strong>
+              <span>Begin with a starting journal entry before the session.</span>
+            </div>
+            <input id="ruleStartTime" type="time" />
+          </label>
+          <label class="rules-row switch-row">
+            <input id="ruleLinkPlaybook" type="checkbox" />
+            <div>
+              <strong>Link trades to playbook</strong>
+              <span>All trades opened must have a playbook attached.</span>
+            </div>
+          </label>
+          <label class="rules-row switch-row">
+            <input id="ruleStopLoss" type="checkbox" />
+            <div>
+              <strong>Input Stop loss to all trades</strong>
+              <span>All trades opened must have a stop loss added.</span>
+            </div>
+          </label>
+          <label class="rules-row switch-row">
+            <input id="ruleMaxLossTrade" type="checkbox" />
+            <div>
+              <strong>Net max loss /trade</strong>
+              <span>The maximum net loss on a trade.</span>
+            </div>
+            <input id="ruleMaxLossTradeValue" type="number" min="0" step="1" />
+          </label>
+          <label class="rules-row switch-row">
+            <input id="ruleMaxLossDay" type="checkbox" />
+            <div>
+              <strong>Net max loss /day</strong>
+              <span>The maximum net loss on a day.</span>
+            </div>
+            <input id="ruleMaxLossDayValue" type="number" min="0" step="1" />
+          </label>
+          <div class="manual-rule-box">
+            <strong>Manual rules</strong>
+            <span>The rule will be added as a daily checklist item.</span>
+            <button class="link-button" type="button">Add rule</button>
+          </div>
+        </section>
+        <footer>
+          <button id="resetProgressButton" class="ghost-button" type="button">Reset all progress</button>
+          <div>
+            <button value="cancel" class="toolbar-button">Cancel</button>
+            <button id="saveRulesButton" class="primary-button" type="button">Save changes</button>
+          </div>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="journalDialog" class="journal-dialog">
+      <form method="dialog" class="journal-card">
+        <header>
+          <div>
+            <span id="journalDate">05/05/2026</span>
+            <h2 id="journalTitle">SPY trade journal</h2>
+          </div>
+          <button class="icon-close" value="cancel" aria-label="Close">×</button>
+        </header>
+        <div class="journal-stats">
+          <div><span>Net P&L</span><strong id="journalPnl">$0</strong></div>
+          <div><span>Side</span><strong id="journalSide">Long</strong></div>
+          <div><span>Size</span><strong id="journalQty">0</strong></div>
+          <div><span>Duration</span><strong id="journalDuration">0m</strong></div>
+        </div>
+        <label>
+          Strategy / setup
+          <input id="journalStrategy" type="text" placeholder="Opening range, VWAP reclaim, reversal..." />
+        </label>
+        <label>
+          Emotion
+          <select id="journalEmotion">
+            <option>Focused</option>
+            <option>Patient</option>
+            <option>FOMO</option>
+            <option>Revenge</option>
+            <option>Hesitant</option>
+          </select>
+        </label>
+        <label>
+          Trade notes
+          <textarea id="journalNotes" rows="5" placeholder="What was the thesis, trigger, management, and exit?"></textarea>
+        </label>
+        <label>
+          Lesson / rule for next time
+          <textarea id="journalLesson" rows="3" placeholder="One concrete adjustment for the next trade."></textarea>
+        </label>
+        <footer>
+          <button id="deleteJournal" class="ghost-button" value="delete" type="button">Clear journal</button>
+          <button id="saveJournal" class="primary-button" value="save" type="button">Save journal</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
