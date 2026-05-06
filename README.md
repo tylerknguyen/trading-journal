@@ -97,6 +97,9 @@ WEBULL_API_ENDPOINT=api.webull.com
 WEBULL_ACCOUNT_ID=
 WEBULL_SYNC_START_DATE=
 WEBULL_SYNC_END_DATE=
+WEBULL_ORDER_PAGE_SIZE=25
+WEBULL_SYNC_CHUNK_DAYS=31
+WEBULL_SYNC_REQUEST_DELAY_SECONDS=1.5
 PORT=5173
 ```
 
@@ -115,6 +118,7 @@ Notes:
 - Keep `WEBULL_API_ENDPOINT=api.webull.com`; do not include `https://`.
 - `WEBULL_ACCOUNT_ID` is optional. If omitted, the sync server tries to use the first account returned by the SDK, then caches it locally under `conf/` so future syncs can skip that extra request.
 - `WEBULL_SYNC_START_DATE` and `WEBULL_SYNC_END_DATE` are optional. If blank, the app requests year-to-date order history.
+- The sync server requests order history in smaller chunks with a short delay between requests to reduce Webull throttling.
 - Do not commit `.env`, `conf/`, logs, or local token files. They are ignored by `.gitignore`.
 
 ## Optional CSV Import

@@ -5,8 +5,9 @@ import os
 import re
 import sys
 import logging
+import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlparse
@@ -29,6 +30,8 @@ class WebullConfig:
     api_endpoint: str
     account_id: str
     page_size: int
+    sync_chunk_days: int
+    sync_request_delay_seconds: float
     sync_start_date: str
     sync_end_date: str
     token_verify_timeout_seconds: int
@@ -43,7 +46,9 @@ class WebullConfig:
             region=os.environ.get("WEBULL_REGION", "us").strip() or "us",
             api_endpoint=normalize_api_endpoint(os.environ.get("WEBULL_API_ENDPOINT", "api.webull.com")),
             account_id=os.environ.get("WEBULL_ACCOUNT_ID", "").strip(),
-            page_size=int(os.environ.get("WEBULL_ORDER_PAGE_SIZE", "100") or "100"),
+            page_size=int(os.environ.get("WEBULL_ORDER_PAGE_SIZE", "25") or "25"),
+            sync_chunk_days=int(os.environ.get("WEBULL_SYNC_CHUNK_DAYS", "31") or "31"),
+            sync_request_delay_seconds=float(os.environ.get("WEBULL_SYNC_REQUEST_DELAY_SECONDS", "1.5") or "1.5"),
             sync_start_date=os.environ.get("WEBULL_SYNC_START_DATE", "").strip() or default_sync_start_date(),
             sync_end_date=os.environ.get("WEBULL_SYNC_END_DATE", "").strip() or datetime.now().strftime("%Y-%m-%d"),
             token_verify_timeout_seconds=int(os.environ.get("WEBULL_TOKEN_VERIFY_TIMEOUT_SECONDS", "25") or "25"),
@@ -92,6 +97,9 @@ def get_webull_status() -> dict[str, Any]:
         "accountIdConfigured": bool(config.account_id),
         "accountIdCached": bool(cached_account_id),
         "tokenVerifyTimeoutSeconds": config.token_verify_timeout_seconds,
+        "pageSize": config.page_size,
+        "syncChunkDays": config.sync_chunk_days,
+        "syncRequestDelaySeconds": config.sync_request_delay_seconds,
         "notes": [
             "Webull's official SDK documentation lists Python 3.8 through 3.11.",
             "Order history supports start_date and end_date; this app defaults to year-to-date sync.",
@@ -122,6 +130,8 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         config.page_size,
         config.sync_start_date,
         config.sync_end_date,
+        config.sync_chunk_days,
+        config.sync_request_delay_seconds,
     )
     rows = normalize_orders_to_csv_rows(raw_orders)
     trades = build_closed_trades_from_rows(rows)
@@ -206,9 +216,11 @@ def fetch_order_history(
     page_size: int,
     start_date: str | None = None,
     end_date: str | None = None,
+    chunk_days: int = 31,
+    request_delay_seconds: float = 1.5,
 ) -> list[dict[str, Any]]:
     candidates = []
-    for client_name in ("order_v3", "order_v2", "order"):
+    for client_name in ("order_v2", "order_v3", "order"):
         client = getattr(trade_client, client_name, None)
         if not client:
             continue
@@ -231,7 +243,15 @@ def fetch_order_history(
     errors: list[str] = []
     for client_name, method_name, method in candidates:
         try:
-            return fetch_order_history_with_method(method, account_id, page_size, start_date, end_date)
+            return fetch_order_history_with_method(
+                method,
+                account_id,
+                page_size,
+                start_date,
+                end_date,
+                chunk_days,
+                request_delay_seconds,
+            )
         except TypeError as error:
             errors.append(f"{client_name}.{method_name}: {error}")
         except WebullSyncError as error:
@@ -283,6 +303,26 @@ def fetch_order_history_with_method(
     page_size: int,
     start_date: str | None = None,
     end_date: str | None = None,
+    chunk_days: int = 31,
+    request_delay_seconds: float = 1.5,
+) -> list[dict[str, Any]]:
+    if start_date and end_date and chunk_days > 0:
+        orders: list[dict[str, Any]] = []
+        for index, (chunk_start, chunk_end) in enumerate(iter_date_chunks(start_date, end_date, chunk_days)):
+            if index:
+                time.sleep(max(0, request_delay_seconds))
+            orders.extend(fetch_order_history_window(method, account_id, page_size, chunk_start, chunk_end, request_delay_seconds))
+        return dedupe_orders(orders)
+    return fetch_order_history_window(method, account_id, page_size, start_date, end_date, request_delay_seconds)
+
+
+def fetch_order_history_window(
+    method: Any,
+    account_id: str,
+    page_size: int,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    request_delay_seconds: float = 1.5,
 ) -> list[dict[str, Any]]:
     orders: list[dict[str, Any]] = []
     last_client_order_id = None
@@ -306,6 +346,7 @@ def fetch_order_history_with_method(
         orders.extend(page_orders)
         if len(page_orders) < page_size:
             break
+        time.sleep(max(0, request_delay_seconds))
         last_order = page_orders[-1]
         last_client_order_id = pick_deep(last_order, "client_order_id", "clientOrderId")
         last_order_id = pick_deep(last_order, "order_id", "orderId")
@@ -314,6 +355,33 @@ def fetch_order_history_with_method(
             break
         seen_cursors.add(cursor)
     return orders
+
+
+def iter_date_chunks(start_date: str, end_date: str, chunk_days: int) -> Iterable[tuple[str, str]]:
+    current = parse_date_key(start_date)
+    final = parse_date_key(end_date)
+    if final < current:
+        current, final = final, current
+    while current <= final:
+        chunk_end = min(final, current + timedelta(days=max(1, chunk_days) - 1))
+        yield current.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d")
+        current = chunk_end + timedelta(days=1)
+
+
+def parse_date_key(value: str) -> date:
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def dedupe_orders(orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for order in orders:
+        key = str(pick_deep(order, "order_id", "orderId", "client_order_id", "clientOrderId") or id(order))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(order)
+    return unique
 
 
 def call_history_method(
