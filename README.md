@@ -95,6 +95,8 @@ WEBULL_APP_SECRET=your_app_secret_here
 WEBULL_REGION=us
 WEBULL_API_ENDPOINT=api.webull.com
 WEBULL_ACCOUNT_ID=
+WEBULL_SYNC_START_DATE=
+WEBULL_SYNC_END_DATE=
 PORT=5173
 ```
 
@@ -112,7 +114,7 @@ Notes:
 
 - Keep `WEBULL_API_ENDPOINT=api.webull.com`; do not include `https://`.
 - `WEBULL_ACCOUNT_ID` is optional. If omitted, the sync server tries to use the first account returned by the SDK.
-- Webull order-history windows can be limited, so CSV import is still useful for backfilling older trades.
+- `WEBULL_SYNC_START_DATE` and `WEBULL_SYNC_END_DATE` are optional. If blank, the app requests year-to-date order history.
 - Do not commit `.env`, `conf/`, logs, or local token files. They are ignored by `.gitignore`.
 
 ## CSV Import

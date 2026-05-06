@@ -28,6 +28,8 @@ class WebullConfig:
     api_endpoint: str
     account_id: str
     page_size: int
+    sync_start_date: str
+    sync_end_date: str
     token_verify_timeout_seconds: int
     token_verify_interval_seconds: int
 
@@ -41,6 +43,8 @@ class WebullConfig:
             api_endpoint=normalize_api_endpoint(os.environ.get("WEBULL_API_ENDPOINT", "api.webull.com")),
             account_id=os.environ.get("WEBULL_ACCOUNT_ID", "").strip(),
             page_size=int(os.environ.get("WEBULL_ORDER_PAGE_SIZE", "100") or "100"),
+            sync_start_date=os.environ.get("WEBULL_SYNC_START_DATE", "").strip() or default_sync_start_date(),
+            sync_end_date=os.environ.get("WEBULL_SYNC_END_DATE", "").strip() or datetime.now().strftime("%Y-%m-%d"),
             token_verify_timeout_seconds=int(os.environ.get("WEBULL_TOKEN_VERIFY_TIMEOUT_SECONDS", "25") or "25"),
             token_verify_interval_seconds=int(os.environ.get("WEBULL_TOKEN_VERIFY_INTERVAL_SECONDS", "5") or "5"),
         )
@@ -87,10 +91,15 @@ def get_webull_status() -> dict[str, Any]:
         "tokenVerifyTimeoutSeconds": config.token_verify_timeout_seconds,
         "notes": [
             "Webull's official SDK documentation lists Python 3.8 through 3.11.",
-            "Order history is documented as historical orders for the past 7 days.",
+            "Order history supports start_date and end_date; this app defaults to year-to-date sync.",
             "First API sync may require approving Webull's token verification prompt in the Webull app/SMS.",
         ],
     }
+
+
+def default_sync_start_date() -> str:
+    now = datetime.now()
+    return datetime(now.year, 1, 1).strftime("%Y-%m-%d")
 
 
 def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -102,13 +111,21 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
 
     trade_client = create_trade_client(config)
     account_id = config.account_id or resolve_account_id(trade_client)
-    raw_orders = fetch_order_history(trade_client, account_id, config.page_size)
+    raw_orders = fetch_order_history(
+        trade_client,
+        account_id,
+        config.page_size,
+        config.sync_start_date,
+        config.sync_end_date,
+    )
     rows = normalize_orders_to_csv_rows(raw_orders)
     trades = build_closed_trades_from_rows(rows)
     return {
         "source": "Webull API",
         "accountId": account_id,
         "rawOrderCount": len(raw_orders),
+        "startDate": config.sync_start_date,
+        "endDate": config.sync_end_date,
         "rowCount": len(rows),
         "tradeCount": len(trades),
         "netPnl": round(sum(float(trade["netPnl"]) for trade in trades), 2),
@@ -159,7 +176,13 @@ def resolve_account_id(trade_client: Any) -> str:
     return str(account_id)
 
 
-def fetch_order_history(trade_client: Any, account_id: str, page_size: int) -> list[dict[str, Any]]:
+def fetch_order_history(
+    trade_client: Any,
+    account_id: str,
+    page_size: int,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[dict[str, Any]]:
     candidates = []
     for client_name in ("order_v3", "order_v2", "order"):
         client = getattr(trade_client, client_name, None)
@@ -184,7 +207,7 @@ def fetch_order_history(trade_client: Any, account_id: str, page_size: int) -> l
     errors: list[str] = []
     for client_name, method_name, method in candidates:
         try:
-            return fetch_order_history_with_method(method, account_id, page_size)
+            return fetch_order_history_with_method(method, account_id, page_size, start_date, end_date)
         except TypeError as error:
             errors.append(f"{client_name}.{method_name}: {error}")
         except WebullSyncError as error:
@@ -215,6 +238,8 @@ def describe_webull_exception(error: Exception) -> str:
         return (
             "Webull rejected the App Key or App Secret. Check the keys in .env and make sure the app is active."
         )
+    if code == "TOO_MANY_REQUESTS" or status == 429:
+        return "Webull rate-limited the sync request. Wait a minute, then click Sync Webull again."
     if code == "ERROR_INIT_TOKEN" or "status:PENDING" in message:
         return (
             "Webull created an access token, but it is still pending verification. "
@@ -228,14 +253,28 @@ def describe_webull_exception(error: Exception) -> str:
     return message
 
 
-def fetch_order_history_with_method(method: Any, account_id: str, page_size: int) -> list[dict[str, Any]]:
+def fetch_order_history_with_method(
+    method: Any,
+    account_id: str,
+    page_size: int,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[dict[str, Any]]:
     orders: list[dict[str, Any]] = []
     last_client_order_id = None
     last_order_id = None
     seen_cursors: set[tuple[str | None, str | None]] = set()
 
     for _page in range(1, 8):
-        response = call_history_method(method, account_id, page_size, last_client_order_id, last_order_id)
+        response = call_history_method(
+            method,
+            account_id,
+            page_size,
+            last_client_order_id,
+            last_order_id,
+            start_date,
+            end_date,
+        )
         payload = response_json(response)
         page_orders = extract_list(payload)
         if not page_orders:
@@ -253,8 +292,19 @@ def fetch_order_history_with_method(method: Any, account_id: str, page_size: int
     return orders
 
 
-def call_history_method(method: Any, account_id: str, page_size: int, last_client_order_id: Any = None, last_order_id: Any = None) -> Any:
+def call_history_method(
+    method: Any,
+    account_id: str,
+    page_size: int,
+    last_client_order_id: Any = None,
+    last_order_id: Any = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> Any:
     attempts = (
+        lambda: method(account_id, page_size=page_size, start_date=start_date, end_date=end_date, last_client_order_id=last_client_order_id, last_order_id=last_order_id),
+        lambda: method(account_id, page_size=page_size, start_date=start_date, end_date=end_date, last_client_order_id=last_client_order_id),
+        lambda: method(account_id, page_size=page_size, start_date=start_date, end_date=end_date),
         lambda: method(account_id, page_size=page_size, last_client_order_id=last_client_order_id, last_order_id=last_order_id),
         lambda: method(account_id, page_size=page_size, last_client_order_id=last_client_order_id),
         lambda: method(account_id, page_size=page_size),
