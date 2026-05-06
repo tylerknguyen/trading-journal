@@ -113,7 +113,7 @@ If Webull returns `Pending Verification`, approve the verification prompt in the
 Notes:
 
 - Keep `WEBULL_API_ENDPOINT=api.webull.com`; do not include `https://`.
-- `WEBULL_ACCOUNT_ID` is optional. If omitted, the sync server tries to use the first account returned by the SDK.
+- `WEBULL_ACCOUNT_ID` is optional. If omitted, the sync server tries to use the first account returned by the SDK, then caches it locally under `conf/` so future syncs can skip that extra request.
 - `WEBULL_SYNC_START_DATE` and `WEBULL_SYNC_END_DATE` are optional. If blank, the app requests year-to-date order history.
 - Do not commit `.env`, `conf/`, logs, or local token files. They are ignored by `.gitignore`.
 

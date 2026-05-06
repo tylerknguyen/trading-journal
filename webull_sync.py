@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 OPTION_SYMBOL_RE = re.compile(r"^([A-Z]{1,6})(\d{2})(\d{2})(\d{2})([CP])(\d{8})$")
+WEBULL_ACCOUNT_CACHE = ROOT / "conf" / "account_id.txt"
 
 
 class WebullSyncError(RuntimeError):
@@ -80,6 +81,7 @@ def get_webull_status() -> dict[str, Any]:
     config = WebullConfig.load()
     sdk_available = importlib.util.find_spec("webull") is not None
     python_supported = (3, 8) <= sys.version_info[:2] <= (3, 11)
+    cached_account_id = load_cached_account_id()
     return {
         "configured": config.configured,
         "sdkAvailable": sdk_available,
@@ -88,10 +90,12 @@ def get_webull_status() -> dict[str, Any]:
         "region": config.region,
         "apiEndpoint": config.api_endpoint,
         "accountIdConfigured": bool(config.account_id),
+        "accountIdCached": bool(cached_account_id),
         "tokenVerifyTimeoutSeconds": config.token_verify_timeout_seconds,
         "notes": [
             "Webull's official SDK documentation lists Python 3.8 through 3.11.",
             "Order history supports start_date and end_date; this app defaults to year-to-date sync.",
+            "Set WEBULL_ACCOUNT_ID in .env to avoid an extra account-list API request on each fresh setup.",
             "First API sync may require approving Webull's token verification prompt in the Webull app/SMS.",
         ],
     }
@@ -110,7 +114,8 @@ def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         raise WebullSyncError("Missing official Webull SDK. Install webull-openapi-python-sdk in a Python 3.8-3.11 environment")
 
     trade_client = create_trade_client(config)
-    account_id = config.account_id or resolve_account_id(trade_client)
+    account_id = config.account_id or load_cached_account_id() or resolve_account_id(trade_client)
+    cache_account_id(account_id)
     raw_orders = fetch_order_history(
         trade_client,
         account_id,
@@ -174,6 +179,25 @@ def resolve_account_id(trade_client: Any) -> str:
     if not account_id:
         raise WebullSyncError("Unable to find account id in Webull account list response")
     return str(account_id)
+
+
+def load_cached_account_id() -> str:
+    try:
+        if not WEBULL_ACCOUNT_CACHE.exists():
+            return ""
+        return WEBULL_ACCOUNT_CACHE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def cache_account_id(account_id: str) -> None:
+    if not account_id:
+        return
+    try:
+        WEBULL_ACCOUNT_CACHE.parent.mkdir(exist_ok=True)
+        WEBULL_ACCOUNT_CACHE.write_text(str(account_id).strip(), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def fetch_order_history(
