@@ -16,6 +16,7 @@ load_dotenv(ROOT / ".env")
 PORT = int(os.environ.get("PORT", "5173"))
 WEBULL_RATE_LIMIT_UNTIL = 0.0
 WEBULL_RATE_LIMIT_SECONDS = int(os.environ.get("WEBULL_RATE_LIMIT_SECONDS", "180") or "180")
+WEBULL_RATE_LIMIT_CACHE = ROOT / "conf" / "webull_rate_limit_until.txt"
 
 
 class TradingJournalHandler(SimpleHTTPRequestHandler):
@@ -110,6 +111,8 @@ def main() -> None:
 
 
 def current_webull_retry_after() -> int:
+    global WEBULL_RATE_LIMIT_UNTIL
+    WEBULL_RATE_LIMIT_UNTIL = max(WEBULL_RATE_LIMIT_UNTIL, load_webull_rate_limit_until())
     return max(0, int(WEBULL_RATE_LIMIT_UNTIL - time.time()))
 
 
@@ -118,7 +121,25 @@ def remember_webull_rate_limit(error: Exception) -> int:
     if "rate-limit" not in str(error).lower() and "rate limited" not in str(error).lower():
         return 0
     WEBULL_RATE_LIMIT_UNTIL = time.time() + WEBULL_RATE_LIMIT_SECONDS
+    save_webull_rate_limit_until(WEBULL_RATE_LIMIT_UNTIL)
     return WEBULL_RATE_LIMIT_SECONDS
+
+
+def load_webull_rate_limit_until() -> float:
+    try:
+        if not WEBULL_RATE_LIMIT_CACHE.exists():
+            return 0.0
+        return float(WEBULL_RATE_LIMIT_CACHE.read_text(encoding="utf-8").strip() or "0")
+    except (OSError, ValueError):
+        return 0.0
+
+
+def save_webull_rate_limit_until(value: float) -> None:
+    try:
+        WEBULL_RATE_LIMIT_CACHE.parent.mkdir(exist_ok=True)
+        WEBULL_RATE_LIMIT_CACHE.write_text(str(float(value)), encoding="utf-8")
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":

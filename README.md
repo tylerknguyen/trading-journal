@@ -135,6 +135,7 @@ For Webull option-order CSVs, the app reconstructs closed trades from filled buy
 - Trades are stored in browser local storage.
 - Journal entries are stored in browser local storage.
 - Webull auth/token cache is stored locally by the SDK under `conf/`.
+- Webull account-id and rate-limit cooldown cache are stored locally under `conf/`.
 - API keys live only in `.env`.
 
 This is a local-first project. It does not upload your trades to a hosted database.
