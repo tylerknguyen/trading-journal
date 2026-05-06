@@ -692,7 +692,7 @@ async function syncWebull() {
       lastDate: merged.map((trade) => trade.closeDate).sort().at(-1) || "",
       importedAt: new Date().toISOString(),
       lastSync: payload.syncedAt || new Date().toISOString(),
-      reconcilerVersion: 2,
+      reconcilerVersion: 3,
     });
     renderImportMeta();
     syncMonthToLatestTrade();
@@ -727,7 +727,7 @@ function webullSyncFailureMessage(message) {
 
 function maybeAutoReconcileWebull() {
   const meta = state.importMeta;
-  if (!meta || meta.source !== "Webull API" || meta.reconcilerVersion === 2) return;
+  if (!meta || meta.source !== "Webull API" || meta.reconcilerVersion === 3) return;
   window.setTimeout(() => syncWebull(), 350);
 }
 
@@ -738,13 +738,30 @@ function mergeTrades(existing, incoming) {
 }
 
 function mergeWebullTrades(existing, incoming) {
-  if (looksLikeSampleData(existing)) {
+  const cleanedExisting = removeSampleTrades(existing);
+  if (looksLikeSampleData(existing) || !cleanedExisting.length) {
     return mergeTrades([], incoming.map((trade) => ({ ...trade, source: "Webull API" })));
   }
   const incomingDates = new Set(incoming.map((trade) => trade.closeDate));
-  transferJournalsToIncomingTrades(existing, incoming);
-  const retained = existing.filter((trade) => !incomingDates.has(trade.closeDate));
+  transferJournalsToIncomingTrades(cleanedExisting, incoming);
+  const retained = cleanedExisting.filter((trade) => !incomingDates.has(trade.closeDate));
   return mergeTrades(retained, incoming.map((trade) => ({ ...trade, source: "Webull API" })));
+}
+
+function removeSampleTrades(trades) {
+  const sampleSignatures = new Set(sampleTrades.map(sampleTradeSignature));
+  return trades.filter((trade) => !sampleSignatures.has(sampleTradeSignature(trade)));
+}
+
+function sampleTradeSignature(trade) {
+  return [
+    trade.closeDate,
+    trade.closeTime,
+    trade.symbol,
+    trade.side,
+    Math.round(number(trade.quantity) * 1000),
+    Math.round(number(trade.netPnl) * 100),
+  ].join("|");
 }
 
 function transferJournalsToIncomingTrades(existing, incoming) {
