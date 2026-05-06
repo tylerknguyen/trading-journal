@@ -3,6 +3,7 @@ const JOURNAL_KEY = "tradezella_local_journal_v1";
 const DATA_KEY = "tradezella_local_trades_v1";
 const META_KEY = "tradezella_local_import_meta_v1";
 const RULES_KEY = "trading_journal_rules_v1";
+const WEBULL_SYNC_COOLDOWN_KEY = "trading_journal_webull_sync_cooldown_until_v1";
 
 const defaultRules = {
   tradingDays: [1, 2, 3, 4, 5],
@@ -251,6 +252,7 @@ ensureImportMeta();
 renderImportMeta();
 render();
 applyInitialRoute();
+refreshSyncCooldown();
 maybeAutoReconcileWebull();
 
 function createTrade(raw) {
@@ -654,6 +656,14 @@ function resetToSampleData() {
 }
 
 async function syncWebull() {
+  const cooldownRemaining = getSyncCooldownRemaining();
+  if (cooldownRemaining > 0) {
+    const message = `Webull is rate-limiting sync. Try again in ${formatDuration(cooldownRemaining)}.`;
+    setSyncStatus(message, "error");
+    showToast(message);
+    refreshSyncCooldown();
+    return;
+  }
   setSyncStatus("Syncing Webull orders...", "ok");
   els.syncWebullButton.disabled = true;
   els.syncWebullButton.classList.add("syncing");
@@ -665,6 +675,9 @@ async function syncWebull() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
+      if (payload.retryAfterSeconds) {
+        setSyncCooldown(Number(payload.retryAfterSeconds));
+      }
       throw new Error(payload.error || `Sync failed with HTTP ${response.status}`);
     }
 
@@ -710,7 +723,7 @@ async function syncWebull() {
     setSyncStatus(webullSyncFailureMessage(message), "error");
     showToast("Webull sync failed. Check the status line.");
   } finally {
-    els.syncWebullButton.disabled = false;
+    if (getSyncCooldownRemaining() <= 0) els.syncWebullButton.disabled = false;
     els.syncWebullButton.classList.remove("syncing");
   }
 }
@@ -730,8 +743,45 @@ function webullSyncFailureMessage(message) {
   return message;
 }
 
+function setSyncCooldown(seconds) {
+  const cooldownSeconds = Math.max(30, Math.min(600, Math.ceil(seconds || 0)));
+  localStorage.setItem(WEBULL_SYNC_COOLDOWN_KEY, String(Date.now() + cooldownSeconds * 1000));
+  refreshSyncCooldown();
+}
+
+function getSyncCooldownRemaining() {
+  const until = Number(localStorage.getItem(WEBULL_SYNC_COOLDOWN_KEY) || 0);
+  const remaining = Math.ceil((until - Date.now()) / 1000);
+  if (remaining <= 0) {
+    localStorage.removeItem(WEBULL_SYNC_COOLDOWN_KEY);
+    return 0;
+  }
+  return remaining;
+}
+
+function refreshSyncCooldown() {
+  const remaining = getSyncCooldownRemaining();
+  if (!remaining) {
+    els.syncWebullButton.disabled = false;
+    return;
+  }
+  els.syncWebullButton.disabled = true;
+  setSyncStatus(`Webull is rate-limiting sync. Try again in ${formatDuration(remaining)}.`, "error");
+  window.clearTimeout(state.syncCooldownTimer);
+  state.syncCooldownTimer = window.setTimeout(refreshSyncCooldown, 1000);
+}
+
+function formatDuration(seconds) {
+  const wholeSeconds = Math.max(0, Math.ceil(seconds));
+  const minutes = Math.floor(wholeSeconds / 60);
+  const remainder = wholeSeconds % 60;
+  if (!minutes) return `${remainder}s`;
+  return `${minutes}m ${String(remainder).padStart(2, "0")}s`;
+}
+
 function maybeAutoReconcileWebull() {
   const meta = state.importMeta;
+  if (getSyncCooldownRemaining() > 0) return;
   if (!meta || meta.source !== "Webull API" || meta.reconcilerVersion === 4) return;
   window.setTimeout(() => syncWebull(), 350);
 }

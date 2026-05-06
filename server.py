@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -13,6 +14,8 @@ from webull_sync import WebullSyncError, get_webull_status, load_dotenv, sync_we
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 PORT = int(os.environ.get("PORT", "5173"))
+WEBULL_RATE_LIMIT_UNTIL = 0.0
+WEBULL_RATE_LIMIT_SECONDS = int(os.environ.get("WEBULL_RATE_LIMIT_SECONDS", "180") or "180")
 
 
 class TradingJournalHandler(SimpleHTTPRequestHandler):
@@ -35,11 +38,32 @@ class TradingJournalHandler(SimpleHTTPRequestHandler):
             return
 
         try:
+            retry_after = current_webull_retry_after()
+            if retry_after > 0:
+                self.send_json(
+                    {
+                        "ok": False,
+                        "error": f"Webull rate limit cooldown active. Try again in {retry_after} seconds.",
+                        "retryAfterSeconds": retry_after,
+                        "status": get_webull_status(),
+                    },
+                    status=429,
+                )
+                return
             payload = self.read_json()
             result = sync_webull_orders(payload)
             self.send_json({"ok": True, **result})
         except WebullSyncError as error:
-            self.send_json({"ok": False, "error": str(error), "status": get_webull_status()}, status=400)
+            retry_after = remember_webull_rate_limit(error)
+            self.send_json(
+                {
+                    "ok": False,
+                    "error": str(error),
+                    "retryAfterSeconds": retry_after if retry_after else None,
+                    "status": get_webull_status(),
+                },
+                status=429 if retry_after else 400,
+            )
         except Exception as error:  # Keep API failures visible in the UI.
             self.send_json({"ok": False, "error": f"Unexpected Webull sync error: {error}"}, status=500)
 
@@ -83,6 +107,18 @@ def main() -> None:
     print(f"Trading Journal running at http://127.0.0.1:{PORT}/")
     print("Use .env for Webull credentials. See .env.example.")
     server.serve_forever()
+
+
+def current_webull_retry_after() -> int:
+    return max(0, int(WEBULL_RATE_LIMIT_UNTIL - time.time()))
+
+
+def remember_webull_rate_limit(error: Exception) -> int:
+    global WEBULL_RATE_LIMIT_UNTIL
+    if "rate-limit" not in str(error).lower() and "rate limited" not in str(error).lower():
+        return 0
+    WEBULL_RATE_LIMIT_UNTIL = time.time() + WEBULL_RATE_LIMIT_SECONDS
+    return WEBULL_RATE_LIMIT_SECONDS
 
 
 if __name__ == "__main__":
