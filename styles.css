@@ -3776,6 +3776,190 @@ svg.radar-svg {
   .playbook-field-row { grid-template-columns: 1fr; }
 }
 
+/* ----------------------------------------------------------------
+   Rules widget on the dashboard
+   ---------------------------------------------------------------- */
+
+.rules-widget-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.rules-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rules-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rules-widget-date { font-variant-numeric: tabular-nums; }
+
+.rules-widget-score {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+.rules-widget-score.all-passed { background: rgba(67, 200, 154, 0.15); color: var(--green-dark); }
+.rules-widget-score.partial { background: rgba(244, 160, 45, 0.15); color: #b16f12; }
+.rules-widget-score.none { background: rgba(255, 102, 109, 0.13); color: var(--red-dark); }
+[data-theme="dark"] .rules-widget-score.all-passed { background: rgba(67, 200, 154, 0.2); color: #7eddb6; }
+[data-theme="dark"] .rules-widget-score.partial { background: rgba(244, 160, 45, 0.2); color: #f4c97e; }
+[data-theme="dark"] .rules-widget-score.none { background: rgba(255, 123, 128, 0.18); color: #ffa3a8; }
+
+.rules-widget-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rules-widget-list li {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--soft-line);
+  font-size: 12.5px;
+}
+
+[data-theme="dark"] .rules-widget-list li { background: #1f1a2b; }
+
+.rules-widget-list li.passed strong { color: var(--ink); }
+.rules-widget-list li.failed strong { color: var(--ink); }
+
+.rules-widget-check {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+}
+.rules-widget-list li.passed .rules-widget-check { background: var(--green); }
+.rules-widget-list li.failed .rules-widget-check { background: var(--red); }
+
+.rules-widget-list li em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rules-widget-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ----------------------------------------------------------------
+   Settings page
+   ---------------------------------------------------------------- */
+
+.settings-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.settings-page-header {
+  margin-bottom: 14px;
+}
+.settings-page-header h1 { font-size: 17px; font-weight: 750; }
+.settings-page-header p { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+.settings-panel {
+  margin-bottom: 12px;
+  padding: 8px 0 4px;
+}
+
+.settings-panel .panel-heading {
+  padding: 0 18px 4px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 18px;
+  border-top: 1px solid var(--soft-line);
+}
+
+.settings-row:first-of-type { border-top: 0; }
+
+[data-theme="dark"] .settings-row { border-top-color: var(--line); }
+
+.settings-row > div:first-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.settings-row strong { font-size: 13px; font-weight: 650; }
+.settings-row span { font-size: 12px; color: var(--muted); }
+
+.settings-readonly {
+  font-size: 12.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  background: var(--soft-line);
+  padding: 6px 10px;
+  border-radius: 5px;
+}
+[data-theme="dark"] .settings-readonly { background: #1f1a2b; }
+
+.settings-row select,
+.settings-row input[type="number"] {
+  min-width: 180px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+}
+[data-theme="dark"] .settings-row select,
+[data-theme="dark"] .settings-row input[type="number"] { background: #1f1a2b; }
+
+.settings-actions-row .settings-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-import-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.settings-row.danger strong { color: var(--red-dark); }
+
+.ghost-button.danger {
+  color: var(--red-dark);
+  border-color: rgba(255, 102, 109, 0.4);
+}
+.ghost-button.danger:hover { background: rgba(255, 102, 109, 0.1); }
+[data-theme="dark"] .ghost-button.danger { color: #ff9ba0; border-color: rgba(255, 123, 128, 0.4); }
+
 /* Inline setup-tag input inside the day modal trade table */
 .setup-tag-input {
   width: 100%;

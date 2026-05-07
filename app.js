@@ -157,6 +157,24 @@ const els = {
   playbookNotes: document.querySelector("#playbookNotes"),
   playbookSaveButton: document.querySelector("#playbookSaveButton"),
   playbookDeleteButton: document.querySelector("#playbookDeleteButton"),
+  settingsView: document.querySelector("#settingsView"),
+  settingsTheme: document.querySelector("#settingsTheme"),
+  settingsDateRange: document.querySelector("#settingsDateRange"),
+  settingsStartingBalance: document.querySelector("#settingsStartingBalance"),
+  settingsLiveBalance: document.querySelector("#settingsLiveBalance"),
+  settingsAccountId: document.querySelector("#settingsAccountId"),
+  settingsApiEndpoint: document.querySelector("#settingsApiEndpoint"),
+  settingsSdkStatus: document.querySelector("#settingsSdkStatus"),
+  settingsPythonVersion: document.querySelector("#settingsPythonVersion"),
+  settingsChunkDays: document.querySelector("#settingsChunkDays"),
+  settingsPageSize: document.querySelector("#settingsPageSize"),
+  settingsTradeCount: document.querySelector("#settingsTradeCount"),
+  settingsJournalCount: document.querySelector("#settingsJournalCount"),
+  settingsPlaybookCount: document.querySelector("#settingsPlaybookCount"),
+  settingsStorageUsed: document.querySelector("#settingsStorageUsed"),
+  settingsExportButton: document.querySelector("#settingsExportButton"),
+  settingsImportInput: document.querySelector("#settingsImportInput"),
+  settingsResetTrades: document.querySelector("#settingsResetTrades"),
   lastImport: document.querySelector("#lastImport"),
   dateRange: document.querySelector("#dateRange"),
   netPnl: document.querySelector("#netPnl"),
@@ -307,6 +325,8 @@ const els = {
   reportsBreakdownTable: document.querySelector("#reportsBreakdownTable"),
   dayEventsChips: document.querySelector("#dayEventsChips"),
   dayEventsInput: document.querySelector("#dayEventsInput"),
+  rulesWidget: document.querySelector("#rulesWidget"),
+  rulesWidgetEdit: document.querySelector("#rulesWidgetEdit"),
   journalTotalTrades: document.querySelector("#journalTotalTrades"),
   journaledTrades: document.querySelector("#journaledTrades"),
   journalMissingTrades: document.querySelector("#journalMissingTrades"),
@@ -427,6 +447,11 @@ function bindEvents() {
   els.syncWebullButton.addEventListener("click", syncWebull);
   const themeToggle = document.querySelector("#themeToggle");
   if (themeToggle) themeToggle.addEventListener("click", toggleTheme);
+  // Apply the user's saved default date range on initial load
+  const savedDefaultRange = loadSettings().defaultDateRange;
+  if (savedDefaultRange && [...els.dateRange.options].some((opt) => opt.value === savedDefaultRange)) {
+    els.dateRange.value = savedDefaultRange;
+  }
   els.dateRange.addEventListener("change", render);
   els.navItems.forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
@@ -616,14 +641,61 @@ function bindEvents() {
   if (els.playbookNewButton) els.playbookNewButton.addEventListener("click", () => openPlaybookDialog(null));
   if (els.playbookSaveButton) els.playbookSaveButton.addEventListener("click", savePlaybook);
   if (els.playbookDeleteButton) els.playbookDeleteButton.addEventListener("click", deletePlaybook);
+
+  // Settings page wiring
+  if (els.settingsTheme) {
+    els.settingsTheme.addEventListener("change", () => {
+      const v = els.settingsTheme.value;
+      if (v === "system") {
+        try { localStorage.removeItem(THEME_KEY); } catch {}
+        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = prefersDark ? "dark" : "light";
+      } else {
+        document.documentElement.dataset.theme = v;
+        try { localStorage.setItem(THEME_KEY, v); } catch {}
+      }
+    });
+  }
+  if (els.settingsDateRange) {
+    els.settingsDateRange.addEventListener("change", () => {
+      persistSettings({ defaultDateRange: els.settingsDateRange.value });
+      // Apply immediately so the dashboard reflects the change next render
+      if (els.dateRange) {
+        els.dateRange.value = els.settingsDateRange.value;
+        render();
+      }
+      showToast("Default range saved.");
+    });
+  }
+  if (els.settingsStartingBalance) {
+    els.settingsStartingBalance.addEventListener("change", () => {
+      const value = Number(els.settingsStartingBalance.value);
+      if (!Number.isFinite(value) || value < 0) return;
+      persistSettings({ startingBalance: value });
+      render();
+      showToast("Starting balance saved.");
+    });
+  }
+  if (els.settingsExportButton) els.settingsExportButton.addEventListener("click", exportAllData);
+  if (els.settingsImportInput) {
+    els.settingsImportInput.addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      if (file) importAllData(file);
+      event.target.value = "";
+    });
+  }
+  if (els.settingsResetTrades) els.settingsResetTrades.addEventListener("click", resetTradeData);
+
+  // Rules widget on dashboard: Edit button opens the same rules dialog as Progress page
+  if (els.rulesWidgetEdit) els.rulesWidgetEdit.addEventListener("click", openRulesDialog);
 }
 
 function switchView(view, options = {}) {
-  const nextView = ["dashboard", "day", "progress", "trade", "journal", "reports", "playbook"].includes(view) ? view : "dashboard";
+  const nextView = ["dashboard", "day", "progress", "trade", "journal", "reports", "playbook", "settings"].includes(view) ? view : "dashboard";
   state.activeView = nextView;
   if (options.date) state.selectedDay = options.date;
   if (options.tradeId) state.activeTradeId = options.tradeId;
-  [els.dashboardView, els.dayView, els.progressView, els.tradeView, els.journalView, els.reportsView, els.playbookView].forEach((section) => {
+  [els.dashboardView, els.dayView, els.progressView, els.tradeView, els.journalView, els.reportsView, els.playbookView, els.settingsView].forEach((section) => {
     if (!section) return;
     section.hidden = section.id !== `${state.activeView}View`;
     section.classList.toggle("active-view", !section.hidden);
@@ -637,6 +709,7 @@ function switchView(view, options = {}) {
   if (state.activeView === "journal") renderJournalPage();
   if (state.activeView === "reports") renderReportsPage();
   if (state.activeView === "playbook") renderPlaybookPage();
+  if (state.activeView === "settings") renderSettingsPage();
   const hash = state.activeView === "trade" && state.activeTradeId
     ? `#trade=${encodeURIComponent(state.activeTradeId)}`
     : state.activeView === "day" && state.selectedDay
@@ -1381,6 +1454,7 @@ function render() {
   const accountBaseline = accountSeries.startingBalance ?? STARTING_BALANCE;
   renderLineChart(els.accountChart, accountSeries.points, { mode: "account", color: "#8f82d9", redLine: accountBaseline });
   renderCalendar(daily);
+  renderRulesWidget(daily);
   renderSetups(closedTrades);
   renderLineChart(els.drawdownChart, buildDrawdownSeries(daily), { mode: "drawdown", color: "#8f82d9", fill: "red" });
   renderScatter(els.timeScatter, closedTrades, "time");
@@ -1966,14 +2040,21 @@ function renderProgressPage() {
 }
 
 function renderRulesTable(daily) {
-  const rows = [
-    ["Start my day by", state.rules.startTime, 0, state.rules.startTime, followRateForRule(daily, "start")],
-    ["Stop trading by", state.rules.stopTime || "15:30", 0, state.rules.stopTime || "15:30", followRateForRule(daily, "stop")],
-    ["Link trades to playbook", "100%", 0, `${journalCoverage()}%`, journalCoverage()],
-    ["Input Stop loss to all trades", "100%", 0, "0%", 0],
-    ["Net max loss /trade", money(state.rules.maxLossTradeValue), 2, money(avgMaxLossTrade(daily)), maxLossTradeFollowRate(daily)],
-    ["Net max loss /day", money(state.rules.maxLossDayValue), 0, money(avgDailyLoss(daily)), maxLossDayFollowRate(daily)],
+  // Only show rules the user has actually enabled — keep the table aligned with
+  // the daily checklist so disabled rules don't appear as "100% follow rate" noise.
+  const allRows = [
+    { enabled: !!state.rules.startDay, row: ["Start my day by", state.rules.startTime, 0, state.rules.startTime, followRateForRule(daily, "start")] },
+    { enabled: !!state.rules.stopTrading, row: ["Stop trading by", state.rules.stopTime || "15:30", 0, state.rules.stopTime || "15:30", followRateForRule(daily, "stop")] },
+    { enabled: !!state.rules.linkPlaybook, row: ["Link trades to playbook", "100%", 0, `${journalCoverage()}%`, journalCoverage()] },
+    { enabled: !!state.rules.stopLoss, row: ["Input Stop loss to all trades", "100%", 0, "0%", 0] },
+    { enabled: !!state.rules.maxLossTrade, row: ["Net max loss /trade", money(state.rules.maxLossTradeValue), 2, money(avgMaxLossTrade(daily)), maxLossTradeFollowRate(daily)] },
+    { enabled: !!state.rules.maxLossDay, row: ["Net max loss /day", money(state.rules.maxLossDayValue), 0, money(avgDailyLoss(daily)), maxLossDayFollowRate(daily)] },
   ];
+  const rows = allRows.filter((entry) => entry.enabled).map((entry) => entry.row);
+  if (!rows.length) {
+    els.rulesTable.innerHTML = `<tr><td colspan="5" class="empty-state">No rules enabled. Click "Edit rules" to turn some on.</td></tr>`;
+    return;
+  }
   els.rulesTable.innerHTML = rows.map((row) => `<tr>
     <td>${escapeHtml(row[0])}</td>
     <td>${escapeHtml(row[1])}</td>
@@ -1995,20 +2076,48 @@ function evaluateDayRules(dayKey, trades) {
   });
   const dayPnl = sum(trades.map((trade) => trade.netPnl));
   const maxTradeLoss = Math.max(0, ...trades.map((trade) => trade.netPnl < 0 ? Math.abs(trade.netPnl) : 0));
+  // Each base check exposes an `enabled` flag so disabled rules can be filtered
+  // out of the daily checklist (and other surfaces) instead of silently passing.
   const baseChecks = [
-    { label: "Start my day by", passed: !state.rules.startDay || !trades.length || earliest <= timeToMinutes(state.rules.startTime), value: state.rules.startTime },
+    {
+      label: "Start my day by",
+      enabled: !!state.rules.startDay,
+      passed: !trades.length || earliest <= timeToMinutes(state.rules.startTime),
+      value: state.rules.startTime,
+    },
     {
       label: "Stop trading by",
-      passed: !state.rules.stopTrading || !trades.length || lateTrades.length === 0,
+      enabled: !!state.rules.stopTrading,
+      passed: !trades.length || lateTrades.length === 0,
       value: trades.length
         ? `${lateTrades.length ? lateTrades.length + " late trade" + (lateTrades.length === 1 ? "" : "s") : "Last open " + minutesToTime(latest ?? 0)} / ${state.rules.stopTime || "15:30"}`
         : (state.rules.stopTime || "15:30"),
     },
-    { label: "Link trades to playbook", passed: !state.rules.linkPlaybook || trades.every((trade) => state.journals[trade.id]?.strategy), value: `${trades.filter((trade) => state.journals[trade.id]?.strategy).length} / ${trades.length}` },
-    { label: "Input Stop loss to all trades", passed: !state.rules.stopLoss || trades.every((trade) => state.journals[trade.id]?.stopLoss), value: `${trades.filter((trade) => state.journals[trade.id]?.stopLoss).length} / ${trades.length}` },
-    { label: "Net max loss /trade", passed: !state.rules.maxLossTrade || maxTradeLoss <= state.rules.maxLossTradeValue, value: `${money(maxTradeLoss)} / ${money(state.rules.maxLossTradeValue)}` },
-    { label: "Net max loss /day", passed: !state.rules.maxLossDay || dayPnl >= -state.rules.maxLossDayValue, value: `${money(Math.abs(Math.min(0, dayPnl)))} / ${money(state.rules.maxLossDayValue)}` },
-  ];
+    {
+      label: "Link trades to playbook",
+      enabled: !!state.rules.linkPlaybook,
+      passed: trades.every((trade) => state.journals[trade.id]?.strategy),
+      value: `${trades.filter((trade) => state.journals[trade.id]?.strategy).length} / ${trades.length}`,
+    },
+    {
+      label: "Input Stop loss to all trades",
+      enabled: !!state.rules.stopLoss,
+      passed: trades.every((trade) => state.journals[trade.id]?.stopLoss),
+      value: `${trades.filter((trade) => state.journals[trade.id]?.stopLoss).length} / ${trades.length}`,
+    },
+    {
+      label: "Net max loss /trade",
+      enabled: !!state.rules.maxLossTrade,
+      passed: maxTradeLoss <= state.rules.maxLossTradeValue,
+      value: `${money(maxTradeLoss)} / ${money(state.rules.maxLossTradeValue)}`,
+    },
+    {
+      label: "Net max loss /day",
+      enabled: !!state.rules.maxLossDay,
+      passed: dayPnl >= -state.rules.maxLossDayValue,
+      value: `${money(Math.abs(Math.min(0, dayPnl)))} / ${money(state.rules.maxLossDayValue)}`,
+    },
+  ].filter((check) => check.enabled);
   const customRules = Array.isArray(state.rules.customRules) ? state.rules.customRules : [];
   const completion = state.rules.customCompletion?.[dayKey] || {};
   const customChecks = customRules.map((rule) => ({
@@ -2833,6 +2942,181 @@ function renderReportsBars(series) {
   </svg>`;
 }
 
+const SETTINGS_KEY = "trading_journal_settings_v1";
+
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") || {};
+  } catch { return {}; }
+}
+
+function persistSettings(patch) {
+  const current = loadSettings();
+  const next = { ...current, ...patch };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
+
+function renderSettingsPage() {
+  if (!els.settingsView) return;
+  const settings = loadSettings();
+  const meta = state.importMeta;
+
+  // Theme: read current data-theme + stored preference
+  if (els.settingsTheme) {
+    const stored = localStorage.getItem(THEME_KEY);
+    els.settingsTheme.value = stored || "system";
+  }
+
+  // Default date range: try to match existing dropdown's value
+  if (els.settingsDateRange) {
+    els.settingsDateRange.value = settings.defaultDateRange || els.dateRange?.value || "all";
+  }
+
+  // Starting balance fallback (legacy STARTING_BALANCE constant)
+  if (els.settingsStartingBalance) {
+    els.settingsStartingBalance.value = Number(settings.startingBalance ?? STARTING_BALANCE);
+  }
+
+  // Live balance from last sync
+  const live = meta?.accountBalance;
+  if (els.settingsLiveBalance) {
+    els.settingsLiveBalance.textContent = live?.netLiquidation != null
+      ? `${money(live.netLiquidation)} ${live.currency || "USD"}${live.fetchedAt ? ` (synced ${new Date(live.fetchedAt).toLocaleString()})` : ""}`
+      : "No Webull sync yet.";
+  }
+
+  // Read-only Webull/SDK info from /api/webull/status. Only fires when Python backend is reachable.
+  fetch("/api/webull/status")
+    .then((r) => r.ok ? r.json() : null)
+    .then((statusPayload) => {
+      if (!statusPayload || !statusPayload.ok) {
+        if (els.settingsAccountId) els.settingsAccountId.textContent = "Backend not reachable";
+        if (els.settingsApiEndpoint) els.settingsApiEndpoint.textContent = "Backend not reachable";
+        if (els.settingsSdkStatus) els.settingsSdkStatus.textContent = "Backend not reachable";
+        if (els.settingsPythonVersion) els.settingsPythonVersion.textContent = "Backend not reachable";
+        if (els.settingsChunkDays) els.settingsChunkDays.textContent = "Backend not reachable";
+        if (els.settingsPageSize) els.settingsPageSize.textContent = "Backend not reachable";
+        return;
+      }
+      if (els.settingsAccountId) els.settingsAccountId.textContent = statusPayload.accountIdCached ? "Cached locally" : "Not cached";
+      if (els.settingsApiEndpoint) els.settingsApiEndpoint.textContent = statusPayload.apiEndpoint || "(unset)";
+      if (els.settingsSdkStatus) {
+        els.settingsSdkStatus.textContent = statusPayload.sdkAvailable
+          ? (statusPayload.pythonSupportedBySdk ? "Available, Python supported" : "Available, Python version unsupported by SDK")
+          : "SDK not installed";
+      }
+      if (els.settingsPythonVersion) els.settingsPythonVersion.textContent = statusPayload.pythonVersion || "--";
+      if (els.settingsChunkDays) els.settingsChunkDays.textContent = String(statusPayload.syncChunkDays ?? "--");
+      if (els.settingsPageSize) els.settingsPageSize.textContent = String(statusPayload.pageSize ?? "--");
+    })
+    .catch(() => { /* ignore on hosted site */ });
+
+  // Data summary
+  const tradeCount = state.trades.length;
+  const closedCount = state.trades.filter(isClosedTrade).length;
+  if (els.settingsTradeCount) els.settingsTradeCount.textContent = `${tradeCount} total (${closedCount} closed)`;
+  if (els.settingsJournalCount) {
+    const journals = Object.keys(state.journals || {}).length;
+    const withImages = Object.values(state.journals || {}).filter((j) => j?.chartImage).length;
+    els.settingsJournalCount.textContent = `${journals} journal${journals === 1 ? "" : "s"}${withImages ? ` (${withImages} with screenshots)` : ""}`;
+  }
+  if (els.settingsPlaybookCount) {
+    els.settingsPlaybookCount.textContent = `${(state.playbooks || []).length} playbook${(state.playbooks || []).length === 1 ? "" : "s"}`;
+  }
+  if (els.settingsStorageUsed) {
+    let bytes = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        bytes += (key?.length || 0) + (localStorage.getItem(key)?.length || 0);
+      }
+    } catch {}
+    const kb = bytes / 1024;
+    els.settingsStorageUsed.textContent = kb >= 1024 ? `${(kb / 1024).toFixed(2)} MB` : `${kb.toFixed(0)} KB`;
+  }
+}
+
+function exportAllData() {
+  const dump = {
+    schema: "trading_journal_v1",
+    exportedAt: new Date().toISOString(),
+    trades: state.trades,
+    journals: state.journals,
+    rules: state.rules,
+    importMeta: state.importMeta,
+    playbooks: state.playbooks,
+    dayEvents: state.dayEvents,
+    settings: loadSettings(),
+  };
+  const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `trading-journal-backup-${toDateKey(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast("Backup downloaded.");
+}
+
+async function importAllData(file) {
+  if (!file) return;
+  if (!confirm("Importing replaces your current trades, journals, rules, playbooks, and events with the contents of this file. Continue?")) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (Array.isArray(data.trades)) {
+      state.trades = data.trades.map(createTrade);
+      persistTrades(state.trades);
+    }
+    if (data.journals && typeof data.journals === "object") {
+      state.journals = data.journals;
+      persistJournals();
+    }
+    if (data.rules && typeof data.rules === "object") {
+      state.rules = { ...defaultRules, ...data.rules };
+      persistRules();
+    }
+    if (data.playbooks && Array.isArray(data.playbooks)) {
+      state.playbooks = data.playbooks;
+      persistPlaybooks();
+    }
+    if (data.dayEvents && typeof data.dayEvents === "object") {
+      state.dayEvents = data.dayEvents;
+      persistDayEvents();
+    }
+    if (data.importMeta && typeof data.importMeta === "object") {
+      state.importMeta = data.importMeta;
+      persistImportMeta(data.importMeta);
+    }
+    if (data.settings && typeof data.settings === "object") {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(data.settings));
+    }
+    showToast("Backup imported.");
+    syncMonthToLatestTrade();
+    render();
+    renderSettingsPage();
+  } catch (error) {
+    console.error(error);
+    showToast("Import failed: invalid JSON file.");
+  }
+}
+
+function resetTradeData() {
+  if (!confirm("This wipes all trades, journals (including chart screenshots), and import history. Playbooks, rules, and day events are kept. Continue?")) return;
+  state.trades = [];
+  state.journals = {};
+  state.importMeta = null;
+  persistTrades([]);
+  persistJournals();
+  localStorage.removeItem(META_KEY);
+  showToast("Trade data reset.");
+  render();
+  renderSettingsPage();
+}
+
 function renderPlaybookPage() {
   if (!els.playbookList) return;
   const playbooks = state.playbooks || [];
@@ -3314,6 +3598,35 @@ function computeSetupStats(closedTrades) {
   }).sort((a, b) => b.totalPnl - a.totalPnl);
 }
 
+function renderRulesWidget(daily) {
+  if (!els.rulesWidget) return;
+  // Pick the most recent trading day to evaluate rules against (so the widget
+  // reflects today's discipline, not all-time follow rate).
+  const sortedDays = Object.keys(daily).sort();
+  const targetDay = sortedDays.at(-1) || toDateKey(new Date());
+  const dayTrades = daily[targetDay]?.trades || [];
+  const checks = evaluateDayRules(targetDay, dayTrades); // already filtered to enabled-only
+  if (!checks.length) {
+    els.rulesWidget.innerHTML = `<div class="rules-widget-empty">
+      <p>No rules enabled yet.</p>
+      <button class="link-button" type="button" onclick="document.querySelector('#rulesWidgetEdit').click()">Set up your rules</button>
+    </div>`;
+    return;
+  }
+  const passed = checks.filter((c) => c.passed).length;
+  els.rulesWidget.innerHTML = `<div class="rules-widget-header">
+      <span class="rules-widget-date">${escapeHtml(formatShortDate(targetDay))}</span>
+      <span class="rules-widget-score ${passed === checks.length ? "all-passed" : passed > 0 ? "partial" : "none"}">${passed}/${checks.length} followed</span>
+    </div>
+    <ul class="rules-widget-list">
+      ${checks.map((check) => `<li class="${check.passed ? "passed" : "failed"}">
+        <span class="rules-widget-check">${check.passed ? "✓" : "✕"}</span>
+        <strong>${escapeHtml(check.label)}</strong>
+        <em>${escapeHtml(check.value)}</em>
+      </li>`).join("")}
+    </ul>`;
+}
+
 function renderSetups(closedTrades) {
   if (!els.setupsTable) return;
   const stats = computeSetupStats(closedTrades);
@@ -3342,13 +3655,16 @@ function renderSetups(closedTrades) {
 function buildAccountSeries(daily) {
   // If we have a live account balance from the most recent Webull sync, anchor
   // the chart there: starting_balance = current_balance - sum(all trade pnl).
-  // Otherwise fall back to the legacy STARTING_BALANCE constant.
+  // Otherwise fall back to the user's configured starting balance from Settings,
+  // or the legacy STARTING_BALANCE constant.
   const liveBalance = Number(state.importMeta?.accountBalance?.netLiquidation);
   const sortedDates = Object.keys(daily).sort();
   const totalPnl = sortedDates.reduce((sum, date) => sum + daily[date].pnl, 0);
+  const settings = loadSettings();
+  const fallback = Number.isFinite(Number(settings.startingBalance)) ? Number(settings.startingBalance) : STARTING_BALANCE;
   const startingBalance = Number.isFinite(liveBalance)
     ? roundCurrency(liveBalance - totalPnl)
-    : STARTING_BALANCE;
+    : fallback;
   let running = startingBalance;
   const points = sortedDates.map((date) => {
     running = roundCurrency(running + daily[date].pnl);

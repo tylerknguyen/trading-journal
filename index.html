@@ -37,6 +37,9 @@
         <button class="nav-item active" title="Dashboard" aria-label="Dashboard" data-view="dashboard">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v7H4zM13 5h7v4h-7zM13 11h7v8h-7zM4 14h7v5H4z"/></svg>
         </button>
+        <button class="nav-item" title="Journal" aria-label="Journal" data-view="journal">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v16H7a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2Zm1 14h10V5H7Zm0 2v.01L17 19v-1H7Z"/></svg>
+        </button>
         <button class="nav-item" title="Day View" aria-label="Day View" data-view="day">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18h14v2H5zM6 4h3v12H6zM11 9h3v7h-3zM16 6h3v10h-3z"/></svg>
         </button>
@@ -49,13 +52,10 @@
         <button class="nav-item" title="Playbook" aria-label="Playbook" data-view="playbook">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12a3 3 0 0 1 3 3v15h-15a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm0 2a1 1 0 0 0-1 1v12a1 1 0 0 1 1-1h13V6a1 1 0 0 0-1-1H5zm2 3h9v2H7zm0 4h9v2H7zm0 4h6v2H7z"/></svg>
         </button>
-        <button class="nav-item" title="Journal" aria-label="Journal" data-view="journal">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v16H7a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2Zm1 14h10V5H7Zm0 2v.01L17 19v-1H7Z"/></svg>
-        </button>
         <button class="nav-item" title="Trade Detail" aria-label="Trade Detail" data-view="trade">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h2v3H7zM15 2h2v3h-2zM4 6h16v15H4zm2 5v8h12v-8z"/></svg>
         </button>
-        <button class="nav-item" title="Settings" aria-label="Settings">
+        <button class="nav-item" title="Settings" aria-label="Settings" data-view="settings">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm8.5 4a7.8 7.8 0 0 0-.2-1.6l2-1.5-2-3.5-2.4 1a8.7 8.7 0 0 0-1.4-.8L16.2 3h-4l-.4 2.6c-.5.2-1 .5-1.4.8l-2.4-1-2 3.5 2 1.5A7.8 7.8 0 0 0 7.8 12c0 .5.1 1.1.2 1.6l-2 1.5 2 3.5 2.4-1c.4.3.9.6 1.4.8l.4 2.6h4l.4-2.6c.5-.2 1-.5 1.4-.8l2.4 1 2-3.5-2-1.5c.1-.5.2-1.1.2-1.6Z"/></svg>
         </button>
       </aside>
@@ -132,6 +132,14 @@
           </section>
 
           <section class="grid dashboard-grid">
+          <article class="panel rules-widget-panel">
+            <div class="panel-heading">
+              <h2>Rules to follow</h2>
+              <button id="rulesWidgetEdit" class="link-button" type="button">Edit</button>
+            </div>
+            <div id="rulesWidget" class="rules-widget"></div>
+          </article>
+
           <article class="panel zella-panel">
             <div class="panel-heading">
               <h2>Performance score</h2>
@@ -572,6 +580,158 @@
             </footer>
           </form>
         </dialog>
+
+        <section id="settingsView" class="app-view settings-page" hidden>
+          <div class="settings-page-header">
+            <div>
+              <h1>Settings</h1>
+              <p>Configure how the journal looks and computes its numbers. All settings save automatically.</p>
+            </div>
+          </div>
+
+          <article class="panel settings-panel">
+            <div class="panel-heading"><h2>Appearance</h2></div>
+            <div class="settings-row">
+              <div>
+                <strong>Theme</strong>
+                <span>Switch between light and dark color schemes.</span>
+              </div>
+              <select id="settingsTheme">
+                <option value="system">Follow system</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Default dashboard date range</strong>
+                <span>Which range loads when you first open the dashboard.</span>
+              </div>
+              <select id="settingsDateRange">
+                <option value="all">All time</option>
+                <option value="month">This month</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+            </div>
+          </article>
+
+          <article class="panel settings-panel">
+            <div class="panel-heading"><h2>Account</h2></div>
+            <div class="settings-row">
+              <div>
+                <strong>Starting balance fallback</strong>
+                <span>Used for the account balance chart when no live Webull balance is available.</span>
+              </div>
+              <input id="settingsStartingBalance" type="number" min="0" step="100" />
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Live account balance (from Webull)</strong>
+                <span>Last fetched during sync. Read-only; updates with each Webull sync.</span>
+              </div>
+              <span id="settingsLiveBalance" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Webull account ID</strong>
+                <span>Cached locally for sync. Edit via WEBULL_ACCOUNT_ID in .env.</span>
+              </div>
+              <span id="settingsAccountId" class="settings-readonly">--</span>
+            </div>
+          </article>
+
+          <article class="panel settings-panel">
+            <div class="panel-heading"><h2>Webull sync</h2></div>
+            <div class="settings-row">
+              <div>
+                <strong>API endpoint</strong>
+                <span>Edit WEBULL_API_ENDPOINT in .env to change.</span>
+              </div>
+              <span id="settingsApiEndpoint" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>SDK availability</strong>
+                <span>Whether the official Webull Python SDK is importable.</span>
+              </div>
+              <span id="settingsSdkStatus" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Python version</strong>
+                <span>Webull SDK officially supports 3.8 - 3.11.</span>
+              </div>
+              <span id="settingsPythonVersion" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Sync chunk days</strong>
+                <span>Set WEBULL_SYNC_CHUNK_DAYS in .env (smaller chunks = safer for heavy traders).</span>
+              </div>
+              <span id="settingsChunkDays" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Page size</strong>
+                <span>Set WEBULL_ORDER_PAGE_SIZE in .env. Larger = fewer requests.</span>
+              </div>
+              <span id="settingsPageSize" class="settings-readonly">--</span>
+            </div>
+          </article>
+
+          <article class="panel settings-panel">
+            <div class="panel-heading"><h2>Data</h2></div>
+            <div class="settings-row">
+              <div>
+                <strong>Trades stored locally</strong>
+                <span>Lives in browser localStorage. Per-device, not synced across browsers.</span>
+              </div>
+              <span id="settingsTradeCount" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Journal entries</strong>
+                <span>Per-trade notes, strategies, and chart screenshots.</span>
+              </div>
+              <span id="settingsJournalCount" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Playbooks</strong>
+                <span>Documented strategies with entry/exit rules.</span>
+              </div>
+              <span id="settingsPlaybookCount" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Storage used</strong>
+                <span>Approximate localStorage size. Limit is roughly 5MB.</span>
+              </div>
+              <span id="settingsStorageUsed" class="settings-readonly">--</span>
+            </div>
+            <div class="settings-row settings-actions-row">
+              <div>
+                <strong>Backup / restore</strong>
+                <span>Export everything to a JSON file or import a previous backup.</span>
+              </div>
+              <div class="settings-action-buttons">
+                <button id="settingsExportButton" class="toolbar-button" type="button">Export JSON</button>
+                <label class="toolbar-button settings-import-label">
+                  Import JSON
+                  <input id="settingsImportInput" type="file" accept="application/json,.json" hidden />
+                </label>
+              </div>
+            </div>
+            <div class="settings-row settings-actions-row danger">
+              <div>
+                <strong>Reset trade data</strong>
+                <span>Wipes trades + journals + import meta. Playbooks, rules, and events are kept. This cannot be undone.</span>
+              </div>
+              <button id="settingsResetTrades" class="ghost-button danger" type="button">Reset trades only</button>
+            </div>
+          </article>
+        </section>
 
         <section id="journalView" class="app-view journal-page" hidden>
           <div class="journal-page-header">
