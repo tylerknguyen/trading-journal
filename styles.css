@@ -2449,3 +2449,69 @@ svg.radar-svg {
 /* Make clickable Daily P&L bars feel interactive */
 .chart-bar-clickable { cursor: pointer; }
 .chart-bar-clickable:hover { opacity: 0.85; }
+
+/* Inline setup-tag input inside the day modal trade table */
+.setup-tag-input {
+  width: 100%;
+  min-width: 96px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--soft-line);
+  border-radius: 4px;
+  outline: none;
+}
+.setup-tag-input:hover {
+  border-color: var(--line);
+}
+.setup-tag-input:focus {
+  border-color: var(--purple);
+  background: var(--panel);
+}
+[data-theme="dark"] .setup-tag-input {
+  background: transparent;
+  border-color: var(--line);
+}
+[data-theme="dark"] .setup-tag-input:focus {
+  background: #1f1a2b;
+  border-color: var(--purple);
+}
+
+/* Setups dashboard panel table */
+.setups-panel .table-wrap {
+  max-height: 280px;
+  overflow-y: auto;
+}
+.setups-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.setups-table th,
+.setups-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--soft-line);
+}
+.setups-table th {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: transparent;
+  position: sticky;
+  top: 0;
+}
+.setups-table td:first-child {
+  font-weight: 650;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setups-table tbody tr:hover { background: var(--soft-line); }
+[data-theme="dark"] .setups-table tbody tr:hover { background: #1f1a2b; }
+[data-theme="dark"] .setups-table th { background: var(--panel); }

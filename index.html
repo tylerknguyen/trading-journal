@@ -219,6 +219,28 @@
             <div class="calendar-grid" id="calendarGrid"></div>
           </article>
 
+          <article class="panel setups-panel">
+            <div class="panel-heading">
+              <h2>Setups</h2>
+              <span title="Per-setup win rate, expectancy, and total P&L. Tag trades from the day modal.">?</span>
+            </div>
+            <div class="table-wrap">
+              <table class="setups-table">
+                <thead>
+                  <tr>
+                    <th>Setup</th>
+                    <th>Trades</th>
+                    <th>Win %</th>
+                    <th>Expectancy</th>
+                    <th>Total P&L</th>
+                  </tr>
+                </thead>
+                <tbody id="setupsTable"></tbody>
+              </table>
+            </div>
+            <p id="setupsEmpty" class="empty-state" hidden>Tag a trade's setup in the day-detail modal to see breakdown here.</p>
+          </article>
+
           <article class="panel drawdown-panel">
             <div class="panel-heading">
               <h2>Drawdown</h2>

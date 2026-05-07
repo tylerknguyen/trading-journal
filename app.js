@@ -160,6 +160,8 @@ const els = {
   calendarGrid: document.querySelector("#calendarGrid"),
   monthlyStats: document.querySelector("#monthlyStats"),
   drawdownChart: document.querySelector("#drawdownChart"),
+  setupsTable: document.querySelector("#setupsTable"),
+  setupsEmpty: document.querySelector("#setupsEmpty"),
   timeScatter: document.querySelector("#timeScatter"),
   durationScatter: document.querySelector("#durationScatter"),
   journalDialog: document.querySelector("#journalDialog"),
@@ -1117,6 +1119,7 @@ function render() {
   const accountBaseline = accountSeries.startingBalance ?? STARTING_BALANCE;
   renderLineChart(els.accountChart, accountSeries.points, { mode: "account", color: "#8f82d9", redLine: accountBaseline });
   renderCalendar(daily);
+  renderSetups(closedTrades);
   renderLineChart(els.drawdownChart, buildDrawdownSeries(daily), { mode: "drawdown", color: "#8f82d9", fill: "red" });
   renderScatter(els.timeScatter, closedTrades, "time");
   renderScatter(els.durationScatter, closedTrades, "duration");
@@ -1366,6 +1369,10 @@ function openDayDialog(dateKey) {
 }
 
 function renderDayTradeRows(trades) {
+  const datalistId = "day-setup-suggestions";
+  const tagOptions = knownSetups()
+    .map((tag) => `<option value="${escapeHtml(tag)}"></option>`)
+    .join("");
   els.dayTradeRows.innerHTML = trades.map((trade) => {
     const journal = state.journals[trade.id] || {};
     const checked = state.selectedDayTradeIds.has(trade.id) ? "checked" : "";
@@ -1376,10 +1383,10 @@ function renderDayTradeRows(trades) {
       <td>${escapeHtml(trade.optionType || trade.side)}</td>
       <td><span class="ticker-pill">${escapeHtml(trade.underlying || trade.symbol)}</span></td>
       <td class="${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</td>
-      <td>${escapeHtml(journal.strategy || "--")}</td>
+      <td><input class="setup-tag-input" type="text" list="${datalistId}" placeholder="tag setup..." value="${escapeHtml(journal.strategy || "")}" data-trade-id="${escapeHtml(trade.id)}" aria-label="Setup tag for ${escapeHtml(displaySymbol(trade))}"></td>
       <td><button class="mini-journal-button" type="button" data-trade-id="${escapeHtml(trade.id)}">${journal.notes || journal.strategy ? "Edit" : "Journal"}</button></td>
     </tr>`;
-  }).join("");
+  }).join("") + `<datalist id="${datalistId}">${tagOptions}</datalist>`;
 
   els.dayTradeRows.querySelectorAll(".trade-select").forEach((checkbox) => {
     checkbox.addEventListener("click", (event) => event.stopPropagation());
@@ -1400,6 +1407,27 @@ function renderDayTradeRows(trades) {
       event.stopPropagation();
       els.dayDialog.close();
       openJournal(button.dataset.tradeId);
+    });
+  });
+  els.dayTradeRows.querySelectorAll(".setup-tag-input").forEach((input) => {
+    input.addEventListener("click", (event) => event.stopPropagation());
+    const commit = () => {
+      const tradeId = input.dataset.tradeId;
+      const next = input.value.trim();
+      const previous = (state.journals[tradeId]?.strategy || "").trim();
+      if (next === previous) return;
+      const existing = state.journals[tradeId] || {};
+      state.journals[tradeId] = { ...existing, strategy: next, updatedAt: new Date().toISOString() };
+      persistJournals();
+      renderSetups(state.filteredTrades.filter(isClosedTrade));
+    };
+    input.addEventListener("change", commit);
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        input.blur();
+      }
     });
   });
 }
@@ -2274,6 +2302,81 @@ function buildCumulativeSeries(daily) {
     running = roundCurrency(running + daily[date].pnl);
     return { date, value: running };
   });
+}
+
+function tradeSetup(trade) {
+  const raw = state.journals[trade.id]?.strategy;
+  if (typeof raw !== "string") return "";
+  return raw.trim();
+}
+
+function knownSetups() {
+  const set = new Set();
+  Object.values(state.journals || {}).forEach((entry) => {
+    const tag = (entry?.strategy || "").trim();
+    if (tag) set.add(tag);
+  });
+  return [...set].sort();
+}
+
+function computeSetupStats(closedTrades) {
+  const buckets = new Map();
+  const untaggedKey = "(untagged)";
+  closedTrades.forEach((trade) => {
+    const setup = tradeSetup(trade) || untaggedKey;
+    if (!buckets.has(setup)) {
+      buckets.set(setup, { setup, count: 0, wins: 0, losses: 0, winSum: 0, lossSum: 0, totalPnl: 0 });
+    }
+    const bucket = buckets.get(setup);
+    bucket.count += 1;
+    bucket.totalPnl += Number(trade.netPnl) || 0;
+    if (trade.netPnl > 0) {
+      bucket.wins += 1;
+      bucket.winSum += Number(trade.netPnl) || 0;
+    } else if (trade.netPnl < 0) {
+      bucket.losses += 1;
+      bucket.lossSum += Number(trade.netPnl) || 0;
+    }
+  });
+  return [...buckets.values()].map((bucket) => {
+    const winRate = bucket.count ? bucket.wins / bucket.count : 0;
+    const avgWin = bucket.wins ? bucket.winSum / bucket.wins : 0;
+    const avgLoss = bucket.losses ? bucket.lossSum / bucket.losses : 0;
+    const expectancy = winRate * avgWin + (1 - winRate) * avgLoss;
+    return {
+      ...bucket,
+      winRate,
+      avgWin,
+      avgLoss,
+      expectancy: roundCurrency(expectancy),
+      totalPnl: roundCurrency(bucket.totalPnl),
+    };
+  }).sort((a, b) => b.totalPnl - a.totalPnl);
+}
+
+function renderSetups(closedTrades) {
+  if (!els.setupsTable) return;
+  const stats = computeSetupStats(closedTrades);
+  const tagged = stats.filter((row) => row.setup !== "(untagged)");
+  if (!tagged.length) {
+    els.setupsTable.innerHTML = "";
+    if (els.setupsEmpty) els.setupsEmpty.hidden = false;
+    return;
+  }
+  if (els.setupsEmpty) els.setupsEmpty.hidden = true;
+  // Show tagged setups first, then a single rolled-up "(untagged)" row at the bottom
+  const ordered = [...tagged, ...stats.filter((row) => row.setup === "(untagged)")];
+  els.setupsTable.innerHTML = ordered.map((row) => {
+    const pnlClass = row.totalPnl >= 0 ? "positive" : "negative";
+    const expClass = row.expectancy >= 0 ? "positive" : "negative";
+    return `<tr>
+      <td title="${escapeHtml(row.setup)}">${escapeHtml(row.setup)}</td>
+      <td>${row.count}</td>
+      <td>${(row.winRate * 100).toFixed(1)}%</td>
+      <td class="${expClass}">${money(row.expectancy)}</td>
+      <td class="${pnlClass}"><strong>${money(row.totalPnl)}</strong></td>
+    </tr>`;
+  }).join("");
 }
 
 function buildAccountSeries(daily) {
