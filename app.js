@@ -248,6 +248,10 @@ const els = {
   journalNotes: document.querySelector("#journalNotes"),
   journalLesson: document.querySelector("#journalLesson"),
   saveJournal: document.querySelector("#saveJournal"),
+  journalChartZone: document.querySelector("#journalChartZone"),
+  journalChartFile: document.querySelector("#journalChartFile"),
+  journalChartPreview: document.querySelector("#journalChartPreview"),
+  journalChartRemove: document.querySelector("#journalChartRemove"),
   deleteJournal: document.querySelector("#deleteJournal"),
   journalSearch: document.querySelector("#journalSearch"),
   journalFilter: document.querySelector("#journalFilter"),
@@ -401,6 +405,48 @@ function bindEvents() {
     });
   });
   els.saveJournal.addEventListener("click", saveJournal);
+
+  // Journal chart-screenshot: paste anywhere in the dialog, click zone to upload, drag-and-drop, or remove
+  if (els.journalDialog) {
+    els.journalDialog.addEventListener("paste", (event) => {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          event.preventDefault();
+          ingestJournalImageBlob(item.getAsFile());
+          return;
+        }
+      }
+    });
+  }
+  if (els.journalChartZone) {
+    els.journalChartZone.addEventListener("click", () => els.journalChartFile?.click());
+    els.journalChartZone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      els.journalChartZone.classList.add("drop-active");
+    });
+    els.journalChartZone.addEventListener("dragleave", () => els.journalChartZone.classList.remove("drop-active"));
+    els.journalChartZone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      els.journalChartZone.classList.remove("drop-active");
+      const file = event.dataTransfer?.files?.[0];
+      if (file) ingestJournalImageBlob(file);
+    });
+  }
+  if (els.journalChartFile) {
+    els.journalChartFile.addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      if (file) ingestJournalImageBlob(file);
+      event.target.value = "";
+    });
+  }
+  if (els.journalChartRemove) {
+    els.journalChartRemove.addEventListener("click", () => {
+      state.pendingChartImage = null;
+      renderJournalChart();
+    });
+  }
   els.deleteJournal.addEventListener("click", deleteJournal);
   els.journalSearch.addEventListener("input", renderJournalPage);
   els.journalFilter.addEventListener("change", renderJournalPage);
@@ -1845,6 +1891,12 @@ function tradingViewSymbol(symbol) {
 
 function renderTradeNotesPane(trade) {
   const journal = state.journals[trade.id] || {};
+  const chartImageBlock = journal.chartImage
+    ? `<div class="notes-block notes-chart-block">
+         <strong>Chart</strong>
+         <img class="notes-chart-image" src="${journal.chartImage}" alt="Saved chart screenshot for trade" />
+       </div>`
+    : "";
   els.tradeInlineNotes.innerHTML = `<div class="notes-block">
     <strong>Trade note</strong>
     <p>${escapeHtml(journal.notes || "No trade note yet.")}</p>
@@ -1853,6 +1905,7 @@ function renderTradeNotesPane(trade) {
     <strong>Daily Journal</strong>
     <p>${escapeHtml(journal.lesson || "Add a lesson or rule for next time.")}</p>
   </div>
+  ${chartImageBlock}
   <button class="primary-button" data-note-trade="${escapeHtml(trade.id)}" type="button">Write note</button>`;
   els.tradeInlineNotes.querySelector("[data-note-trade]").addEventListener("click", () => openJournal(trade.id));
 }
@@ -2450,20 +2503,53 @@ function openJournal(tradeId) {
   els.journalEmotion.value = journal.emotion || "Focused";
   els.journalNotes.value = journal.notes || "";
   els.journalLesson.value = journal.lesson || "";
+  state.pendingChartImage = journal.chartImage || null;
+  renderJournalChart();
   els.journalDialog.showModal();
+}
+
+function renderJournalChart() {
+  const image = state.pendingChartImage;
+  if (image) {
+    els.journalChartPreview.src = image;
+    els.journalChartPreview.hidden = false;
+    els.journalChartZone.hidden = true;
+    if (els.journalChartRemove) els.journalChartRemove.hidden = false;
+  } else {
+    els.journalChartPreview.removeAttribute("src");
+    els.journalChartPreview.hidden = true;
+    els.journalChartZone.hidden = false;
+    if (els.journalChartRemove) els.journalChartRemove.hidden = true;
+  }
 }
 
 function saveJournal() {
   const tradeId = state.activeTradeId;
   if (!tradeId) return;
-  state.journals[tradeId] = {
+  const existing = state.journals[tradeId] || {};
+  const next = {
     strategy: els.journalStrategy.value.trim(),
     emotion: els.journalEmotion.value,
     notes: els.journalNotes.value.trim(),
     lesson: els.journalLesson.value.trim(),
     updatedAt: new Date().toISOString(),
   };
-  persistJournals();
+  if (state.pendingChartImage) {
+    next.chartImage = state.pendingChartImage;
+  } else if (existing.chartImage) {
+    // chart was explicitly removed
+  }
+  state.journals[tradeId] = next;
+  try {
+    persistJournals();
+  } catch (error) {
+    if (error?.name === "QuotaExceededError" || /quota/i.test(String(error))) {
+      showToast("Storage full — try removing the screenshot or clearing older journal images.");
+      return;
+    }
+    throw error;
+  }
+  state.pendingChartImage = null;
   els.journalDialog.close();
   renderTradesTable();
   renderJournalPage();
@@ -2472,6 +2558,44 @@ function saveJournal() {
     openDayDialog(state.selectedDay);
   }
   showToast("Journal saved.");
+}
+
+async function ingestJournalImageBlob(blob) {
+  if (!blob || !blob.type || !blob.type.startsWith("image/")) return;
+  try {
+    const compressed = await compressImageBlob(blob, 1600, 0.82);
+    state.pendingChartImage = compressed;
+    renderJournalChart();
+  } catch (error) {
+    showToast("Couldn't process that image. Try a smaller screenshot.");
+  }
+}
+
+function compressImageBlob(blob, maxWidth = 1600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+        const targetW = Math.round(img.width * scale);
+        const targetH = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        // JPEG keeps file size sane for chart screenshots (mostly flat colors).
+        // For PNG-ish source with text overlays, JPEG @ 0.82 usually still looks sharp.
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 function deleteJournal() {

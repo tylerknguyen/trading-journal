@@ -666,6 +666,17 @@
           Lesson / rule for next time
           <textarea id="journalLesson" rows="3" placeholder="One concrete adjustment for the next trade."></textarea>
         </label>
+        <div class="journal-chart-block">
+          <div class="journal-chart-header">
+            <span>Chart screenshot</span>
+            <button id="journalChartRemove" type="button" class="link-button" hidden>Remove</button>
+          </div>
+          <div id="journalChartZone" class="journal-chart-zone" tabindex="0" aria-label="Paste a chart screenshot here">
+            <p class="journal-chart-hint">Press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste a chart screenshot, or click to upload.</p>
+            <input id="journalChartFile" type="file" accept="image/*" hidden />
+          </div>
+          <img id="journalChartPreview" class="journal-chart-preview" alt="Saved chart screenshot" hidden />
+        </div>
         <footer>
           <button id="deleteJournal" class="ghost-button" value="delete" type="button">Clear journal</button>
           <button id="saveJournal" class="primary-button" value="save" type="button">Save journal</button>

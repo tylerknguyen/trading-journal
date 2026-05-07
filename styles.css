@@ -2626,6 +2626,111 @@ svg.radar-svg {
   border-color: rgba(132, 120, 232, 0.3);
 }
 
+/* ----------------------------------------------------------------
+   Journal chart screenshot (Ctrl+V paste) UI
+   ---------------------------------------------------------------- */
+
+.journal-chart-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.journal-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.journal-chart-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: 18px;
+  border: 1.5px dashed var(--line);
+  border-radius: 8px;
+  background: var(--soft-line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.journal-chart-zone:hover,
+.journal-chart-zone:focus-visible,
+.journal-chart-zone.drop-active {
+  border-color: var(--purple);
+  background: var(--purple-soft);
+  color: var(--ink);
+  outline: none;
+}
+
+.journal-chart-hint {
+  margin: 0;
+  font-size: 12.5px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.journal-chart-hint kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 1px 0 rgba(30, 19, 48, 0.06);
+}
+
+.journal-chart-preview {
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+[data-theme="dark"] .journal-chart-zone {
+  background: #14101e;
+  border-color: var(--line);
+}
+
+[data-theme="dark"] .journal-chart-zone:hover,
+[data-theme="dark"] .journal-chart-zone:focus-visible,
+[data-theme="dark"] .journal-chart-zone.drop-active {
+  background: rgba(132, 120, 232, 0.15);
+  border-color: var(--purple);
+}
+
+[data-theme="dark"] .journal-chart-hint kbd {
+  background: #1f1a2b;
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Saved chart screenshot inside trade-detail notes pane */
+.notes-chart-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.notes-chart-image {
+  width: 100%;
+  max-height: 380px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
 /* Inline setup-tag input inside the day modal trade table */
 .setup-tag-input {
   width: 100%;
