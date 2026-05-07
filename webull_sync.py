@@ -665,6 +665,21 @@ def build_closed_trades_from_rows(rows: list[dict[str, str]]) -> list[dict[str, 
         while abs(signed) > 0.000001:
             position = positions.get(fill["contract"])
             if not position or abs(position["quantity"]) < 0.000001:
+                # Webull tags each fill with position_intent (OPEN/CLOSE/CLOSE_LONG/
+                # CLOSE_SHORT). If we receive a CLOSE-intent fill without an existing
+                # position, the original open happened before our sync window — so
+                # synthesize the opener as the inverse direction (a CLOSE Sell means
+                # the prior position was Long; CLOSE Buy means prior position was
+                # Short). Without this, the first-seen fill incorrectly sets the
+                # position direction to its own side, flipping Long/Short on display.
+                intent = str(fill.get("position_intent", "")).upper()
+                if "CLOSE" in intent:
+                    inferred = open_position(fill, -signed)
+                    inferred["entry_executions"] = []
+                    inferred["entry_notional"] = abs(signed) * fill["price"]
+                    positions[fill["contract"]] = inferred
+                    # Fall through into the closing branch below by NOT zeroing signed
+                    continue
                 positions[fill["contract"]] = open_position(fill, signed)
                 signed = 0
                 continue

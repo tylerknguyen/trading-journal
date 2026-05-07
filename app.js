@@ -1830,7 +1830,7 @@ function renderTradeStats(trade) {
       <span>Net P&L</span><strong>${money(trade.netPnl)}</strong>
     </div>
     <dl>
-      <dt>Side</dt><dd>${escapeHtml(trade.side.toUpperCase())}</dd>
+      <dt>Side</dt><dd>${escapeHtml(displaySide(trade))}</dd>
       <dt>Account</dt><dd>Webull</dd>
       <dt>Options traded</dt><dd>${trade.quantity}</dd>
       <dt>Commissions & Fees</dt><dd>${money(trade.commissions || 0)}</dd>
@@ -2496,9 +2496,17 @@ function openJournal(tradeId) {
   els.journalTitle.textContent = `${displaySymbol(trade)} trade journal`;
   els.journalPnl.textContent = money(trade.netPnl);
   els.journalPnl.className = trade.netPnl >= 0 ? "positive" : "negative";
-  els.journalSide.textContent = trade.side;
+  els.journalSide.textContent = displaySide(trade);
   els.journalQty.textContent = String(trade.quantity);
   els.journalDuration.textContent = durationLabel(trade.durationMinutes);
+  // Refresh the strategy dropdown with every previously-used setup so the user
+  // can pick from history instead of retyping.
+  const strategyDatalist = document.querySelector("#journalStrategyOptions");
+  if (strategyDatalist) {
+    strategyDatalist.innerHTML = knownSetups()
+      .map((tag) => `<option value="${escapeHtml(tag)}"></option>`)
+      .join("");
+  }
   els.journalStrategy.value = journal.strategy || "";
   els.journalEmotion.value = journal.emotion || "Focused";
   els.journalNotes.value = journal.notes || "";
@@ -2726,6 +2734,18 @@ function formatTime(date) {
 
 function roundCurrency(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function displaySide(trade) {
+  const side = String(trade.side || "").toUpperCase();
+  const optionType = String(trade.optionType || "").toUpperCase();
+  if (optionType === "CALL" || optionType === "PUT") {
+    // Long-the-contract = bought to open. Short-the-contract = sold to open.
+    // Surfacing "LONG PUT" vs "SHORT PUT" removes the bullish/bearish ambiguity
+    // that "LONG" alone causes for option traders.
+    return `${side} ${optionType}`;
+  }
+  return side;
 }
 
 function displaySymbol(trade) {
