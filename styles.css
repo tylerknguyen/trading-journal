@@ -2997,21 +2997,32 @@ svg.radar-svg {
 }
 
 /* R-multiple pill rendered next to P&L on journal trade rows */
-.journal-trade-r {
-  font-size: 11px;
+.journal-trade-r,
+.r-pill {
+  display: inline-block;
+  font-size: 10.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  padding: 2px 7px;
+  padding: 1px 6px;
   border-radius: 4px;
   background: var(--soft-line);
-  min-width: 56px;
   text-align: center;
   letter-spacing: 0.02em;
+  font-style: normal;
 }
-.journal-trade-r.positive { background: rgba(67, 200, 154, 0.13); color: var(--green-dark); }
-.journal-trade-r.negative { background: rgba(255, 102, 109, 0.13); color: var(--red-dark); }
-[data-theme="dark"] .journal-trade-r.positive { background: rgba(67, 200, 154, 0.18); color: #7eddb6; }
-[data-theme="dark"] .journal-trade-r.negative { background: rgba(255, 123, 128, 0.18); color: #ffa3a8; }
+.journal-trade-r { min-width: 56px; padding: 2px 7px; font-size: 11px; }
+.journal-trade-r.positive,
+.r-pill.positive { background: rgba(67, 200, 154, 0.13); color: var(--green-dark); }
+.journal-trade-r.negative,
+.r-pill.negative { background: rgba(255, 102, 109, 0.13); color: var(--red-dark); }
+[data-theme="dark"] .journal-trade-r.positive,
+[data-theme="dark"] .r-pill.positive { background: rgba(67, 200, 154, 0.18); color: #7eddb6; }
+[data-theme="dark"] .journal-trade-r.negative,
+[data-theme="dark"] .r-pill.negative { background: rgba(255, 123, 128, 0.18); color: #ffa3a8; }
+/* R-pill inside day modal P&L cell sits below the dollar value */
+.day-table td .r-pill { display: block; margin-top: 2px; }
+/* R-pill on day-view trade chips slots between P&L and the time range */
+.day-trade-chip .r-pill { margin: 2px 0; }
 
 /* Mistake-tag input section in the journal dialog */
 .journal-field {
@@ -3074,8 +3085,11 @@ svg.radar-svg {
 }
 [data-theme="dark"] .journal-mistake-remove { color: #ffa3a8; }
 
-/* Auto-backup banner pinned to the top of the dashboard */
-.backup-banner {
+/* Auto-backup banner pinned to the top of the dashboard.
+   Use :not([hidden]) so the HTML `hidden` attribute actually hides it —
+   plain `.backup-banner { display: flex }` would otherwise override the
+   default `[hidden] { display: none }` and leave it visible after snooze. */
+.backup-banner:not([hidden]) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

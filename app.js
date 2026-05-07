@@ -1860,7 +1860,10 @@ function renderDayTradeRows(trades) {
       <td title="${escapeHtml(trade.contract || trade.symbol)}">${escapeHtml(displayInstrument(trade))}</td>
       <td>${escapeHtml(trade.optionType || trade.side)}</td>
       <td><span class="ticker-pill">${escapeHtml(trade.underlying || trade.symbol)}</span></td>
-      <td class="${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</td>
+      <td class="${trade.netPnl >= 0 ? "positive" : "negative"}">
+        ${money(trade.netPnl)}
+        ${(() => { const r = tradeRMultiple(trade); return r != null ? `<div class="r-pill ${r >= 0 ? "positive" : "negative"}" title="R-multiple = net P&L / risk basis (${money(tradeRiskBasis(trade) || 0)})">${formatR(r)}</div>` : ""; })()}
+      </td>
       <td><input class="setup-tag-input" type="text" list="${datalistId}" placeholder="tag setup..." value="${escapeHtml(journal.strategy || "")}" data-trade-id="${escapeHtml(trade.id)}" aria-label="Setup tag for ${escapeHtml(displaySymbol(trade))}"></td>
       <td><button class="mini-journal-button" type="button" data-trade-id="${escapeHtml(trade.id)}">${journal.notes || journal.strategy ? "Edit" : "Journal"}</button></td>
     </tr>`;
@@ -2077,11 +2080,15 @@ function renderDayCard(dateKey, info) {
       <div class="day-card-stat"><span>Profit Factor</span><strong>${stats.profitFactor >= 99 ? "--" : stats.profitFactor.toFixed(2)}</strong></div>
     </div>
     <div class="day-card-trades">
-      ${trades.map((trade) => `<button class="day-trade-chip" data-open-trade="${escapeHtml(trade.id)}" type="button">
-        <span>${escapeHtml(trade.underlying || trade.symbol)}</span>
-        <b class="${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</b>
-        <small>${trade.openTime || tradeOpenTime(trade)} - ${trade.exitTime || trade.closeTime}</small>
-      </button>`).join("")}
+      ${trades.map((trade) => {
+        const r = tradeRMultiple(trade);
+        return `<button class="day-trade-chip" data-open-trade="${escapeHtml(trade.id)}" type="button">
+          <span>${escapeHtml(trade.underlying || trade.symbol)}</span>
+          <b class="${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</b>
+          ${r != null ? `<i class="r-pill ${r >= 0 ? "positive" : "negative"}" title="R-multiple = net P&L / risk basis (${money(tradeRiskBasis(trade) || 0)})">${formatR(r)}</i>` : ""}
+          <small>${trade.openTime || tradeOpenTime(trade)} - ${trade.exitTime || trade.closeTime}</small>
+        </button>`;
+      }).join("")}
     </div>
   </article>`;
 }
@@ -2404,6 +2411,11 @@ function openTradeDetail(tradeId) {
 
 function renderTradeStats(trade) {
   const roi = trade.adjustedCost ? trade.netPnl / trade.adjustedCost * 100 : 0;
+  const r = tradeRMultiple(trade);
+  const risk = tradeRiskBasis(trade);
+  const rRow = r != null
+    ? `<dt title="Realized P&L expressed in units of pre-trade risk. R = net P&L / risk basis. Not the same as risk:reward ratio.">R-multiple</dt><dd class="${r >= 0 ? "positive" : "negative"}">${formatR(r)}${risk ? ` <small>(risk ${money(risk)})</small>` : ""}</dd>`
+    : "";
   return `<div class="trade-net ${trade.netPnl >= 0 ? "positive" : "negative"}">
       <span>Net P&L</span><strong>${money(trade.netPnl)}</strong>
     </div>
@@ -2413,6 +2425,7 @@ function renderTradeStats(trade) {
       <dt>Options traded</dt><dd>${trade.quantity}</dd>
       <dt>Commissions & Fees</dt><dd>${money(trade.commissions || 0)}</dd>
       <dt>Net ROI</dt><dd>${roi.toFixed(2)}%</dd>
+      ${rRow}
       <dt>Gross P&L</dt><dd>${money(trade.grossPnl ?? trade.netPnl)}</dd>
       <dt>Adjusted Cost</dt><dd>${money(trade.adjustedCost || 0)}</dd>
       <dt>Average Entry</dt><dd>${priceLabel(trade.entryPrice)}</dd>
