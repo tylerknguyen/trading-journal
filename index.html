@@ -89,6 +89,13 @@
           </div>
           </div>
           <div id="syncStatus" class="sync-status" role="status" aria-live="polite"></div>
+          <div id="backupBanner" class="backup-banner" hidden>
+            <span id="backupBannerText"></span>
+            <div class="backup-banner-actions">
+              <button id="backupBannerExport" class="primary-button" type="button">Export now</button>
+              <button id="backupBannerDismiss" class="ghost-button" type="button">Snooze 7 days</button>
+            </div>
+          </div>
 
           <section class="metrics-grid" aria-label="Summary metrics">
           <article class="metric-card">
@@ -231,6 +238,27 @@
               <div id="monthlyStats" class="monthly-stats"></div>
             </div>
             <div class="calendar-grid" id="calendarGrid"></div>
+          </article>
+
+          <article class="panel mistakes-panel">
+            <div class="panel-heading">
+              <h2>Mistakes</h2>
+              <span title="Top mistakes by total P&L impact. Tag mistakes in each trade's journal entry.">?</span>
+            </div>
+            <div class="table-wrap">
+              <table class="setups-table">
+                <thead>
+                  <tr>
+                    <th>Mistake</th>
+                    <th>Trades</th>
+                    <th>Total P&L</th>
+                    <th>Avg per trade</th>
+                  </tr>
+                </thead>
+                <tbody id="mistakesTable"></tbody>
+              </table>
+            </div>
+            <p id="mistakesEmpty" class="empty-state" hidden>No mistake tags yet. Open a trade's journal and tag any rule violations or behavioral errors to see what's costing you the most.</p>
           </article>
 
           <article class="panel setups-panel">
@@ -1029,6 +1057,30 @@
             <option>Revenge</option>
             <option>Hesitant</option>
           </select>
+        </label>
+        <div class="journal-field">
+          <span class="journal-field-label">Mistakes</span>
+          <span class="journal-field-help">Tag any rule violations or behavioral errors. Press Enter or comma to add.</span>
+          <div id="journalMistakeChips" class="journal-mistake-chips"></div>
+          <input id="journalMistakeInput" type="text" list="journalMistakeOptions" placeholder="FOMO entry, no stop, chased, revenge, oversized..." autocomplete="off" />
+          <datalist id="journalMistakeOptions">
+            <option value="FOMO entry"></option>
+            <option value="No stop"></option>
+            <option value="Chased"></option>
+            <option value="Revenge trade"></option>
+            <option value="Oversized"></option>
+            <option value="Held loser"></option>
+            <option value="Ignored signal"></option>
+            <option value="Broke rules"></option>
+            <option value="Took profit too early"></option>
+            <option value="Moved stop further away"></option>
+            <option value="Traded after stop time"></option>
+            <option value="Traded outside playbook"></option>
+          </datalist>
+        </div>
+        <label>
+          Risk on this trade ($)
+          <input id="journalRisk" type="number" min="0" step="1" placeholder="Optional override; defaults to 'Net max loss /trade'" />
         </label>
         <label>
           Trade notes

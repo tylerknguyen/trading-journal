@@ -150,6 +150,7 @@ const state = {
   selectedDayTradeIds: new Set(),
   reportsTab: "days",
   pendingChartImage: null,
+  pendingMistakes: [],
   dayEvents: loadDayEvents(),
   playbooks: loadPlaybooks(),
   activePlaybookId: null,
@@ -232,6 +233,15 @@ const els = {
   drawdownChart: document.querySelector("#drawdownChart"),
   setupsTable: document.querySelector("#setupsTable"),
   setupsEmpty: document.querySelector("#setupsEmpty"),
+  mistakesTable: document.querySelector("#mistakesTable"),
+  mistakesEmpty: document.querySelector("#mistakesEmpty"),
+  journalMistakeChips: document.querySelector("#journalMistakeChips"),
+  journalMistakeInput: document.querySelector("#journalMistakeInput"),
+  journalRisk: document.querySelector("#journalRisk"),
+  backupBanner: document.querySelector("#backupBanner"),
+  backupBannerText: document.querySelector("#backupBannerText"),
+  backupBannerExport: document.querySelector("#backupBannerExport"),
+  backupBannerDismiss: document.querySelector("#backupBannerDismiss"),
   timeScatter: document.querySelector("#timeScatter"),
   durationScatter: document.querySelector("#durationScatter"),
   journalDialog: document.querySelector("#journalDialog"),
@@ -550,6 +560,35 @@ function bindEvents() {
       renderJournalChart();
     });
   }
+
+  // Journal mistake input: add on Enter or comma, like the day-events input
+  if (els.journalMistakeInput) {
+    const commitMistake = () => {
+      const value = els.journalMistakeInput.value;
+      if (!value.trim()) return;
+      value.split(",").forEach((part) => addJournalMistake(part));
+      els.journalMistakeInput.value = "";
+    };
+    els.journalMistakeInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === ",") {
+        event.preventDefault();
+        commitMistake();
+      }
+    });
+    els.journalMistakeInput.addEventListener("blur", commitMistake);
+  }
+
+  // Backup banner buttons
+  if (els.backupBannerExport) els.backupBannerExport.addEventListener("click", () => {
+    exportAllData();
+    persistSettings({ lastBackupAt: new Date().toISOString(), backupSnoozedUntil: null });
+    refreshBackupBanner();
+  });
+  if (els.backupBannerDismiss) els.backupBannerDismiss.addEventListener("click", () => {
+    const snoozeUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    persistSettings({ backupSnoozedUntil: snoozeUntil });
+    refreshBackupBanner();
+  });
   els.deleteJournal.addEventListener("click", deleteJournal);
   els.journalSearch.addEventListener("input", renderJournalPage);
   els.journalFilter.addEventListener("change", renderJournalPage);
@@ -1531,7 +1570,9 @@ function render() {
   renderLineChart(els.accountChart, accountSeries.points, { mode: "account", color: "#8f82d9", redLine: accountBaseline });
   renderCalendar(daily);
   renderRulesWidget(daily);
+  renderMistakes(closedTrades);
   renderSetups(closedTrades);
+  refreshBackupBanner();
   renderLineChart(els.drawdownChart, buildDrawdownSeries(daily), { mode: "drawdown", color: "#8f82d9", fill: "red" });
   renderScatter(els.timeScatter, closedTrades, "time");
   renderScatter(els.durationScatter, closedTrades, "duration");
@@ -2703,12 +2744,21 @@ function renderJournalTradeRow(trade) {
   // Always surface the emotion (even the default "Focused") so reviewing past
   // trades shows the full mental-state context, not just outliers.
   if (journal.emotion) tagBits.push(`<span class="journal-tag emotion ${journal.emotion.toLowerCase()}">${escapeHtml(journal.emotion)}</span>`);
+  // Mistake tags rendered as red chips so behavioral errors stand out visually
+  (journal.mistakes || []).forEach((m) => {
+    tagBits.push(`<span class="journal-tag mistake">${escapeHtml(m)}</span>`);
+  });
+  const rValue = tradeRMultiple(trade);
+  const rPill = rValue != null
+    ? `<span class="journal-trade-r ${rValue >= 0 ? "positive" : "negative"}" title="R-multiple = net P&L / risk basis (${money(tradeRiskBasis(trade) || 0)})">${formatR(rValue)}</span>`
+    : "";
   return `<article class="journal-trade-row" data-trade-id="${escapeHtml(trade.id)}">
     <div class="journal-trade-head">
       <span class="journal-trade-time">${escapeHtml(tradeOpenTime(trade) || "--")}</span>
       <span class="journal-trade-instrument" title="${escapeHtml(displayInstrument(trade))}">${escapeHtml(displayInstrumentShort(trade))}</span>
       <span class="journal-trade-side">${escapeHtml(displaySide(trade))}</span>
       <span class="journal-trade-pnl ${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</span>
+      ${rPill}
       <button class="journal-trade-edit small-button" type="button" data-trade-id="${escapeHtml(trade.id)}">${hasJournal ? "Edit" : "Journal"}</button>
     </div>
     ${tagBits.length ? `<div class="journal-trade-tags">${tagBits.join("")}</div>` : ""}
@@ -2865,6 +2915,14 @@ function computeReportsStats(trades) {
   const largestProfitDay = dailyEntries.length ? Math.max(...dailyEntries.map(([, v]) => v)) : 0;
   const largestLossDay = dailyEntries.length ? Math.min(...dailyEntries.map(([, v]) => v)) : 0;
 
+  // R-multiple stats (risk-normalized P&L)
+  const rValues = trades.map((t) => tradeRMultiple(t)).filter((r) => r != null);
+  const rWins = rValues.filter((r) => r > 0);
+  const rLosses = rValues.filter((r) => r < 0);
+  const avgRWin = rWins.length ? rWins.reduce((a, b) => a + b, 0) / rWins.length : 0;
+  const avgRLoss = rLosses.length ? rLosses.reduce((a, b) => a + b, 0) / rLosses.length : 0;
+  const expectancyR = rValues.length ? rValues.reduce((a, b) => a + b, 0) / rValues.length : 0;
+
   return {
     totalPnl, totalTrades: trades.length, winners: winners.length, losers: losers.length,
     winRate, avgWin, avgLoss, expectancy, profitFactor,
@@ -2873,6 +2931,7 @@ function computeReportsStats(trades) {
     avgDailyPnl, avgWinningDayPnl, avgLosingDayPnl,
     largestProfitDay, largestLossDay,
     maxDrawdown, maxWinStreak, maxLoseStreak,
+    avgRWin, avgRLoss, expectancyR, rValuesCount: rValues.length,
   };
 }
 
@@ -2900,6 +2959,9 @@ function renderReportsStatsCards(s) {
     cell("Max drawdown", money(s.maxDrawdown), s.maxDrawdown < 0 ? "negative" : ""),
     cell("Max consecutive winning days", s.maxWinStreak),
     cell("Max consecutive losing days", s.maxLoseStreak),
+    cell("Avg R-multiple (winners)", formatR(s.avgRWin), s.avgRWin >= 0 ? "positive" : "negative"),
+    cell("Avg R-multiple (losers)", formatR(s.avgRLoss), s.avgRLoss >= 0 ? "positive" : "negative"),
+    cell("Expectancy (R)", formatR(s.expectancyR), s.expectancyR >= 0 ? "positive" : "negative"),
   ].join("");
 }
 
@@ -3142,6 +3204,10 @@ function exportAllData() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  // Track when the user last actually exported so the auto-backup banner
+  // can stop nagging until next staleness window
+  persistSettings({ lastBackupAt: new Date().toISOString(), backupSnoozedUntil: null });
+  refreshBackupBanner();
   showToast("Backup downloaded.");
 }
 
@@ -3625,6 +3691,122 @@ function buildCumulativeSeries(daily) {
   });
 }
 
+// Default risk per trade comes from the "Net max loss /trade" rule value
+// (or $100 fallback). User can override per-trade via the journal dialog's
+// risk field. Returns null if no risk basis is available.
+function tradeRiskBasis(trade) {
+  const journal = state.journals[trade.id];
+  if (journal && Number.isFinite(Number(journal.riskAmount)) && Number(journal.riskAmount) > 0) {
+    return Number(journal.riskAmount);
+  }
+  const ruleRisk = Number(state.rules?.maxLossTradeValue);
+  if (Number.isFinite(ruleRisk) && ruleRisk > 0) return ruleRisk;
+  return null;
+}
+
+function tradeRMultiple(trade) {
+  const risk = tradeRiskBasis(trade);
+  if (!risk) return null;
+  const r = (Number(trade.netPnl) || 0) / risk;
+  return Number.isFinite(r) ? r : null;
+}
+
+function formatR(value) {
+  if (value == null || !Number.isFinite(value)) return "--";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}R`;
+}
+
+function tradeMistakes(trade) {
+  const m = state.journals[trade.id]?.mistakes;
+  return Array.isArray(m) ? m : [];
+}
+
+function knownMistakes() {
+  // Pull from existing journal entries so suggestions grow with usage
+  const set = new Set();
+  Object.values(state.journals || {}).forEach((entry) => {
+    (entry?.mistakes || []).forEach((m) => {
+      const trimmed = String(m).trim();
+      if (trimmed) set.add(trimmed);
+    });
+  });
+  return [...set].sort();
+}
+
+function computeMistakeStats(closedTrades) {
+  // Each mistake's bucket aggregates trades that include that mistake. Trades
+  // with multiple mistakes count toward each one (so totals sum higher than
+  // total P&L; that's fine — we want per-mistake impact).
+  const buckets = new Map();
+  closedTrades.forEach((trade) => {
+    tradeMistakes(trade).forEach((mistake) => {
+      const key = mistake;
+      if (!buckets.has(key)) buckets.set(key, { mistake: key, count: 0, totalPnl: 0 });
+      const bucket = buckets.get(key);
+      bucket.count += 1;
+      bucket.totalPnl += Number(trade.netPnl) || 0;
+    });
+  });
+  return [...buckets.values()].map((b) => ({
+    ...b,
+    totalPnl: roundCurrency(b.totalPnl),
+    avgPnl: b.count ? roundCurrency(b.totalPnl / b.count) : 0,
+  })).sort((a, b) => a.totalPnl - b.totalPnl); // most-bleeding first
+}
+
+function renderMistakes(closedTrades) {
+  if (!els.mistakesTable) return;
+  const stats = computeMistakeStats(closedTrades);
+  if (!stats.length) {
+    els.mistakesTable.innerHTML = "";
+    if (els.mistakesEmpty) els.mistakesEmpty.hidden = false;
+    return;
+  }
+  if (els.mistakesEmpty) els.mistakesEmpty.hidden = true;
+  els.mistakesTable.innerHTML = stats.map((row) => {
+    const pnlClass = row.totalPnl >= 0 ? "positive" : "negative";
+    const avgClass = row.avgPnl >= 0 ? "positive" : "negative";
+    return `<tr>
+      <td title="${escapeHtml(row.mistake)}">${escapeHtml(row.mistake)}</td>
+      <td>${row.count}</td>
+      <td class="${pnlClass}"><strong>${money(row.totalPnl)}</strong></td>
+      <td class="${avgClass}">${money(row.avgPnl)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function refreshBackupBanner() {
+  if (!els.backupBanner) return;
+  const settings = loadSettings();
+  const lastBackup = settings.lastBackupAt ? new Date(settings.lastBackupAt) : null;
+  const snoozedUntil = settings.backupSnoozedUntil ? new Date(settings.backupSnoozedUntil) : null;
+  const tradeCount = state.trades.length;
+  const hasJournals = Object.keys(state.journals || {}).length > 0;
+  const now = new Date();
+  // Don't bother nagging until there's actually something to back up
+  if (tradeCount < 5 && !hasJournals) {
+    els.backupBanner.hidden = true;
+    return;
+  }
+  // Respect snooze
+  if (snoozedUntil && snoozedUntil > now) {
+    els.backupBanner.hidden = true;
+    return;
+  }
+  const dayMs = 24 * 60 * 60 * 1000;
+  const stale = !lastBackup || (now - lastBackup) > 7 * dayMs;
+  if (!stale) {
+    els.backupBanner.hidden = true;
+    return;
+  }
+  const daysSince = lastBackup ? Math.floor((now - lastBackup) / dayMs) : null;
+  els.backupBannerText.textContent = lastBackup
+    ? `It's been ${daysSince} days since your last backup. Trade data lives only in this browser — export a JSON copy now to be safe.`
+    : `You haven't backed up yet. Trade data lives only in this browser; one click exports a JSON copy of everything.`;
+  els.backupBanner.hidden = false;
+}
+
 function tradeSetup(trade) {
   const raw = state.journals[trade.id]?.strategy;
   if (typeof raw !== "string") return "";
@@ -3818,9 +4000,42 @@ function openJournal(tradeId) {
   els.journalEmotion.value = journal.emotion || "Focused";
   els.journalNotes.value = journal.notes || "";
   els.journalLesson.value = journal.lesson || "";
+  if (els.journalRisk) els.journalRisk.value = journal.riskAmount != null ? journal.riskAmount : "";
   state.pendingChartImage = journal.chartImage || null;
+  state.pendingMistakes = Array.isArray(journal.mistakes) ? [...journal.mistakes] : [];
   renderJournalChart();
+  renderJournalMistakeChips();
   els.journalDialog.showModal();
+}
+
+function renderJournalMistakeChips() {
+  if (!els.journalMistakeChips) return;
+  const mistakes = state.pendingMistakes || [];
+  if (!mistakes.length) {
+    els.journalMistakeChips.innerHTML = `<span class="journal-mistake-empty">No mistakes tagged.</span>`;
+    return;
+  }
+  els.journalMistakeChips.innerHTML = mistakes.map((m) =>
+    `<span class="journal-mistake-chip">${escapeHtml(m)}<button type="button" class="journal-mistake-remove" data-mistake="${escapeHtml(m)}" aria-label="Remove ${escapeHtml(m)}">×</button></span>`
+  ).join("");
+  els.journalMistakeChips.querySelectorAll(".journal-mistake-remove").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.pendingMistakes = (state.pendingMistakes || []).filter((m) => m !== btn.dataset.mistake);
+      renderJournalMistakeChips();
+    });
+  });
+}
+
+function addJournalMistake(label) {
+  const trimmed = String(label || "").trim();
+  if (!trimmed) return;
+  if (!Array.isArray(state.pendingMistakes)) state.pendingMistakes = [];
+  // Case-insensitive de-dupe
+  if (state.pendingMistakes.some((m) => m.toLowerCase() === trimmed.toLowerCase())) return;
+  state.pendingMistakes = [...state.pendingMistakes, trimmed];
+  renderJournalMistakeChips();
 }
 
 function renderJournalChart() {
@@ -3847,8 +4062,15 @@ function saveJournal() {
     emotion: els.journalEmotion.value,
     notes: els.journalNotes.value.trim(),
     lesson: els.journalLesson.value.trim(),
+    mistakes: Array.isArray(state.pendingMistakes) ? [...state.pendingMistakes] : [],
     updatedAt: new Date().toISOString(),
   };
+  // Per-trade risk override (numeric). Empty = use the rule default at compute time.
+  const riskRaw = els.journalRisk?.value;
+  const riskNum = Number(riskRaw);
+  if (riskRaw && Number.isFinite(riskNum) && riskNum > 0) {
+    next.riskAmount = riskNum;
+  }
   if (state.pendingChartImage) {
     next.chartImage = state.pendingChartImage;
   } else if (existing.chartImage) {
