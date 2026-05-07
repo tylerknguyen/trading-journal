@@ -43,6 +43,9 @@
         <button class="nav-item" title="Progress" aria-label="Progress" data-view="progress">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4v7H4zM10 9h4v11h-4zM16 4h4v16h-4zM4 4h9v3H4z"/></svg>
         </button>
+        <button class="nav-item" title="Reports" aria-label="Reports" data-view="reports">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v3H5zM5 8h14v13H5zm2 2v9h10v-9zm2 1h2v7H9zm4 2h2v5h-2zm4-1h2v6h-2z"/></svg>
+        </button>
         <button class="nav-item" title="Journal" aria-label="Journal" data-view="journal">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h11a2 2 0 0 1 2 2v16H7a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2Zm1 14h10V5H7Zm0 2v.01L17 19v-1H7Z"/></svg>
         </button>
@@ -423,6 +426,83 @@
           </div>
         </section>
 
+        <section id="reportsView" class="app-view reports-page" hidden>
+          <div class="reports-page-header">
+            <div>
+              <h1>Reports</h1>
+              <p>Performance breakdown by date range, day of week, and month.</p>
+            </div>
+            <div class="reports-controls">
+              <select id="reportsRange" aria-label="Reports date range">
+                <option value="all">All time</option>
+                <option value="ytd" selected>Year to date</option>
+                <option value="month">This month</option>
+                <option value="last30">Last 30 days</option>
+                <option value="last90">Last 90 days</option>
+                <option value="last365">Last 365 days</option>
+                <option value="custom">Custom range</option>
+              </select>
+              <input id="reportsStart" type="date" aria-label="Start date" hidden />
+              <input id="reportsEnd" type="date" aria-label="End date" hidden />
+            </div>
+          </div>
+
+          <section class="reports-highlight-grid">
+            <article class="reports-highlight-card">
+              <span>Best day</span>
+              <strong id="reportsBestDay">--</strong>
+              <small id="reportsBestDayValue">--</small>
+            </article>
+            <article class="reports-highlight-card">
+              <span>Worst day</span>
+              <strong id="reportsWorstDay">--</strong>
+              <small id="reportsWorstDayValue">--</small>
+            </article>
+            <article class="reports-highlight-card">
+              <span>Most active day</span>
+              <strong id="reportsActiveDay">--</strong>
+              <small id="reportsActiveDayValue">--</small>
+            </article>
+            <article class="reports-highlight-card">
+              <span>Best win rate</span>
+              <strong id="reportsBestWinDay">--</strong>
+              <small id="reportsBestWinDayValue">--</small>
+            </article>
+          </section>
+
+          <article class="panel reports-stats-panel">
+            <div class="panel-heading">
+              <h2>Overview</h2>
+              <span id="reportsRangeLabel" class="reports-range-label"></span>
+            </div>
+            <div class="reports-stats-grid" id="reportsStatsGrid"></div>
+          </article>
+
+          <article class="panel reports-day-panel">
+            <div class="reports-tabs">
+              <button class="reports-tab active" data-tab="days" type="button">Day of week</button>
+              <button class="reports-tab" data-tab="months" type="button">Months</button>
+            </div>
+            <div id="reportsBreakdownChart" class="chart-area reports-breakdown-chart"></div>
+            <div class="table-wrap reports-table-wrap">
+              <table class="reports-breakdown-table">
+                <thead>
+                  <tr>
+                    <th id="reportsBreakdownLabel">Day</th>
+                    <th>Trades</th>
+                    <th>Win %</th>
+                    <th>Net P&amp;L</th>
+                    <th>Avg win</th>
+                    <th>Avg loss</th>
+                    <th>Expectancy</th>
+                  </tr>
+                </thead>
+                <tbody id="reportsBreakdownTable"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
         <section id="journalView" class="app-view journal-page" hidden>
           <div class="journal-page-header">
             <div>
@@ -461,27 +541,14 @@
           </section>
 
           <article class="panel journal-list-panel">
-            <div class="panel-heading">
+            <div class="panel-heading journal-list-heading">
               <h2>Trade journal</h2>
-              <span title="Click any row to edit that trade journal">?</span>
+              <div class="journal-bulk-actions">
+                <button id="journalExpandAll" class="small-button" type="button">Expand all</button>
+                <button id="journalCollapseAll" class="small-button" type="button">Collapse all</button>
+              </div>
             </div>
-            <div class="journal-table-wrap">
-              <table class="journal-table">
-                <thead>
-                  <tr>
-                    <th>Close Date</th>
-                    <th>Instrument</th>
-                    <th>Side</th>
-                    <th>Net P&L</th>
-                    <th>Strategy</th>
-                    <th>Emotion</th>
-                    <th>Notes</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="journalTable"></tbody>
-              </table>
-            </div>
+            <div id="journalDays" class="journal-days"></div>
           </article>
         </section>
       </main>

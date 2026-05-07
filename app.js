@@ -120,6 +120,8 @@ const state = {
   activeTradeTab: "chart",
   selectedDay: null,
   selectedDayTradeIds: new Set(),
+  reportsTab: "days",
+  pendingChartImage: null,
 };
 
 const els = {
@@ -132,6 +134,7 @@ const els = {
   progressView: document.querySelector("#progressView"),
   tradeView: document.querySelector("#tradeView"),
   journalView: document.querySelector("#journalView"),
+  reportsView: document.querySelector("#reportsView"),
   lastImport: document.querySelector("#lastImport"),
   dateRange: document.querySelector("#dateRange"),
   netPnl: document.querySelector("#netPnl"),
@@ -255,7 +258,25 @@ const els = {
   deleteJournal: document.querySelector("#deleteJournal"),
   journalSearch: document.querySelector("#journalSearch"),
   journalFilter: document.querySelector("#journalFilter"),
-  journalTable: document.querySelector("#journalTable"),
+  journalDays: document.querySelector("#journalDays"),
+  journalExpandAll: document.querySelector("#journalExpandAll"),
+  journalCollapseAll: document.querySelector("#journalCollapseAll"),
+  reportsRange: document.querySelector("#reportsRange"),
+  reportsStart: document.querySelector("#reportsStart"),
+  reportsEnd: document.querySelector("#reportsEnd"),
+  reportsBestDay: document.querySelector("#reportsBestDay"),
+  reportsBestDayValue: document.querySelector("#reportsBestDayValue"),
+  reportsWorstDay: document.querySelector("#reportsWorstDay"),
+  reportsWorstDayValue: document.querySelector("#reportsWorstDayValue"),
+  reportsActiveDay: document.querySelector("#reportsActiveDay"),
+  reportsActiveDayValue: document.querySelector("#reportsActiveDayValue"),
+  reportsBestWinDay: document.querySelector("#reportsBestWinDay"),
+  reportsBestWinDayValue: document.querySelector("#reportsBestWinDayValue"),
+  reportsRangeLabel: document.querySelector("#reportsRangeLabel"),
+  reportsStatsGrid: document.querySelector("#reportsStatsGrid"),
+  reportsBreakdownChart: document.querySelector("#reportsBreakdownChart"),
+  reportsBreakdownLabel: document.querySelector("#reportsBreakdownLabel"),
+  reportsBreakdownTable: document.querySelector("#reportsBreakdownTable"),
   journalTotalTrades: document.querySelector("#journalTotalTrades"),
   journaledTrades: document.querySelector("#journaledTrades"),
   journalMissingTrades: document.querySelector("#journalMissingTrades"),
@@ -450,6 +471,16 @@ function bindEvents() {
   els.deleteJournal.addEventListener("click", deleteJournal);
   els.journalSearch.addEventListener("input", renderJournalPage);
   els.journalFilter.addEventListener("change", renderJournalPage);
+  if (els.journalExpandAll) {
+    els.journalExpandAll.addEventListener("click", () => {
+      els.journalDays?.querySelectorAll(".journal-day-card").forEach((card) => card.classList.remove("collapsed"));
+    });
+  }
+  if (els.journalCollapseAll) {
+    els.journalCollapseAll.addEventListener("click", () => {
+      els.journalDays?.querySelectorAll(".journal-day-card").forEach((card) => card.classList.add("collapsed"));
+    });
+  }
   els.dayDialog.addEventListener("close", () => {
     if (location.hash.startsWith("#day=")) history.replaceState(null, "", "#dashboard");
   });
@@ -498,14 +529,35 @@ function bindEvents() {
       renderTradeTabs();
     });
   });
+
+  // Reports page wiring
+  if (els.reportsRange) {
+    els.reportsRange.addEventListener("change", () => {
+      const isCustom = els.reportsRange.value === "custom";
+      if (els.reportsStart) els.reportsStart.hidden = !isCustom;
+      if (els.reportsEnd) els.reportsEnd.hidden = !isCustom;
+      renderReportsPage();
+    });
+  }
+  if (els.reportsStart) els.reportsStart.addEventListener("change", renderReportsPage);
+  if (els.reportsEnd) els.reportsEnd.addEventListener("change", renderReportsPage);
+  document.querySelectorAll(".reports-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".reports-tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      state.reportsTab = tab.dataset.tab;
+      renderReportsPage();
+    });
+  });
 }
 
 function switchView(view, options = {}) {
-  const nextView = ["dashboard", "day", "progress", "trade", "journal"].includes(view) ? view : "dashboard";
+  const nextView = ["dashboard", "day", "progress", "trade", "journal", "reports"].includes(view) ? view : "dashboard";
   state.activeView = nextView;
   if (options.date) state.selectedDay = options.date;
   if (options.tradeId) state.activeTradeId = options.tradeId;
-  [els.dashboardView, els.dayView, els.progressView, els.tradeView, els.journalView].forEach((section) => {
+  [els.dashboardView, els.dayView, els.progressView, els.tradeView, els.journalView, els.reportsView].forEach((section) => {
+    if (!section) return;
     section.hidden = section.id !== `${state.activeView}View`;
     section.classList.toggle("active-view", !section.hidden);
   });
@@ -516,6 +568,7 @@ function switchView(view, options = {}) {
   if (state.activeView === "progress") renderProgressPage();
   if (state.activeView === "trade") renderTradePage();
   if (state.activeView === "journal") renderJournalPage();
+  if (state.activeView === "reports") renderReportsPage();
   const hash = state.activeView === "trade" && state.activeTradeId
     ? `#trade=${encodeURIComponent(state.activeTradeId)}`
     : state.activeView === "day" && state.selectedDay
@@ -2050,7 +2103,7 @@ function renderJournalPage() {
 
   const search = els.journalSearch.value.trim().toLowerCase();
   const filter = els.journalFilter.value;
-  const rows = allTrades.filter((trade) => {
+  const matchesFilter = (trade) => {
     const journal = state.journals[trade.id] || {};
     const haystack = [
       trade.closeDate,
@@ -2070,34 +2123,380 @@ function renderJournalPage() {
     if (filter === "wins") return trade.netPnl > 0;
     if (filter === "losses") return trade.netPnl < 0;
     return true;
+  };
+
+  const filtered = allTrades.filter(matchesFilter);
+  if (!filtered.length) {
+    els.journalDays.innerHTML = `<div class="empty-state">No trades match this journal view.</div>`;
+    return;
+  }
+
+  // Group filtered trades by closeDate (preserves descending order from sort above)
+  const byDate = new Map();
+  filtered.forEach((trade) => {
+    if (!byDate.has(trade.closeDate)) byDate.set(trade.closeDate, []);
+    byDate.get(trade.closeDate).push(trade);
   });
 
-  els.journalTable.innerHTML = rows.length ? rows.map((trade) => {
-    const journal = state.journals[trade.id] || {};
-    const status = hasJournalEntry(trade.id)
-      ? `<span class="status-pill done">Saved</span>`
-      : `<span class="status-pill todo">Needed</span>`;
-    return `<tr data-trade-id="${escapeHtml(trade.id)}">
-      <td>${formatShortDate(trade.closeDate)}</td>
-      <td title="${escapeHtml(trade.contract || trade.symbol)}">${escapeHtml(displayInstrument(trade))}</td>
-      <td>${escapeHtml(trade.optionType || trade.side)}</td>
-      <td class="${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</td>
-      <td>${escapeHtml(journal.strategy || "--")}</td>
-      <td>${escapeHtml(journal.emotion || "--")}</td>
-      <td><div class="journal-snippet">${status} ${escapeHtml(journal.notes || journal.lesson || "")}</div></td>
-      <td><button class="journal-button ${hasJournalEntry(trade.id) ? "has-journal" : ""}" type="button" data-trade-id="${escapeHtml(trade.id)}">${hasJournalEntry(trade.id) ? "Edit" : "Journal"}</button></td>
-    </tr>`;
-  }).join("") : `<tr><td colspan="8">No trades match this journal view.</td></tr>`;
+  // Render one card per day
+  els.journalDays.innerHTML = [...byDate.entries()].map(([dateKey, dayTrades]) => {
+    return renderJournalDayCard(dateKey, dayTrades);
+  }).join("");
 
-  els.journalTable.querySelectorAll("tr[data-trade-id]").forEach((row) => {
-    row.addEventListener("click", () => openJournal(row.dataset.tradeId));
+  // Wire up interactions on the rendered cards
+  els.journalDays.querySelectorAll(".journal-day-toggle").forEach((toggle) => {
+    toggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      const card = toggle.closest(".journal-day-card");
+      if (card) card.classList.toggle("collapsed");
+    });
   });
-  els.journalTable.querySelectorAll(".journal-button").forEach((button) => {
+  els.journalDays.querySelectorAll(".journal-trade-row[data-trade-id]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      // Don't trigger when clicking a chart screenshot (modal preview) or the edit button
+      if (event.target.closest(".journal-trade-screenshot") || event.target.closest("button")) return;
+      openJournal(row.dataset.tradeId);
+    });
+  });
+  els.journalDays.querySelectorAll(".journal-trade-edit").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       openJournal(button.dataset.tradeId);
     });
   });
+  els.journalDays.querySelectorAll(".journal-trade-screenshot img").forEach((img) => {
+    img.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openJournalImagePreview(img.src);
+    });
+  });
+}
+
+function renderJournalDayCard(dateKey, dayTrades) {
+  const tradesByTime = [...dayTrades].sort((a, b) => timeToMinutes(a.closeTime) - timeToMinutes(b.closeTime));
+  const totalPnl = sum(dayTrades.map((trade) => trade.netPnl));
+  const wins = dayTrades.filter((trade) => trade.netPnl > 0);
+  const winRate = dayTrades.length ? (wins.length / dayTrades.length) * 100 : 0;
+  const journaledCount = dayTrades.filter((trade) => hasJournalEntry(trade.id)).length;
+  const allJournaled = journaledCount === dayTrades.length;
+  // Default expansion: a day is expanded if it has any journal entries (so you can see them
+  // when scrolling), collapsed otherwise to keep unjournaled noise quiet.
+  const collapseClass = journaledCount === 0 ? " collapsed" : "";
+  const tradeRowsHtml = tradesByTime.map((trade) => renderJournalTradeRow(trade)).join("");
+
+  return `<section class="journal-day-card${collapseClass}" data-date="${escapeHtml(dateKey)}">
+    <button class="journal-day-toggle" type="button" aria-expanded="${journaledCount > 0}">
+      <span class="journal-day-chevron" aria-hidden="true">▸</span>
+      <div class="journal-day-meta">
+        <strong class="journal-day-date">${escapeHtml(weekdayDate(dateKey))}</strong>
+        <span class="journal-day-stats">
+          <span class="${totalPnl >= 0 ? "positive" : "negative"}"><b>${money(totalPnl)}</b></span>
+          <span>${dayTrades.length} ${dayTrades.length === 1 ? "trade" : "trades"}</span>
+          <span>${winRate.toFixed(0)}% win</span>
+          <span class="journal-day-status ${allJournaled ? "done" : journaledCount > 0 ? "partial" : "todo"}">${journaledCount}/${dayTrades.length} journaled</span>
+        </span>
+      </div>
+    </button>
+    <div class="journal-day-body">${tradeRowsHtml}</div>
+  </section>`;
+}
+
+function renderJournalTradeRow(trade) {
+  const journal = state.journals[trade.id] || {};
+  const hasJournal = hasJournalEntry(trade.id);
+  const screenshot = journal.chartImage
+    ? `<div class="journal-trade-screenshot"><img src="${journal.chartImage}" alt="Chart screenshot for ${escapeHtml(displayInstrument(trade))}" /></div>`
+    : "";
+  const notesText = journal.notes ? journal.notes : (hasJournal ? "" : "");
+  const lessonText = journal.lesson ? journal.lesson : "";
+  const tagBits = [];
+  if (journal.strategy) tagBits.push(`<span class="journal-tag setup">${escapeHtml(journal.strategy)}</span>`);
+  if (journal.emotion && journal.emotion !== "Focused") tagBits.push(`<span class="journal-tag emotion">${escapeHtml(journal.emotion)}</span>`);
+  return `<article class="journal-trade-row" data-trade-id="${escapeHtml(trade.id)}">
+    <div class="journal-trade-head">
+      <span class="journal-trade-time">${escapeHtml(tradeOpenTime(trade) || "--")}</span>
+      <span class="journal-trade-instrument" title="${escapeHtml(trade.contract || trade.symbol)}">${escapeHtml(displayInstrument(trade))}</span>
+      <span class="journal-trade-side">${escapeHtml(displaySide(trade))}</span>
+      <span class="journal-trade-pnl ${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</span>
+      <button class="journal-trade-edit small-button" type="button" data-trade-id="${escapeHtml(trade.id)}">${hasJournal ? "Edit" : "Journal"}</button>
+    </div>
+    ${tagBits.length ? `<div class="journal-trade-tags">${tagBits.join("")}</div>` : ""}
+    ${notesText ? `<p class="journal-trade-notes"><b>Notes:</b> ${escapeHtml(notesText)}</p>` : ""}
+    ${lessonText ? `<p class="journal-trade-notes lesson"><b>Lesson:</b> ${escapeHtml(lessonText)}</p>` : ""}
+    ${!hasJournal ? `<p class="journal-trade-notes empty">No journal yet — click to add notes, strategy, or paste a chart screenshot.</p>` : ""}
+    ${screenshot}
+  </article>`;
+}
+
+function renderReportsPage() {
+  if (!els.reportsView) return;
+  const range = els.reportsRange?.value || "ytd";
+  const today = new Date();
+  let startDate = null;
+  let endDate = today;
+  if (range === "all") {
+    startDate = null;
+  } else if (range === "ytd") {
+    startDate = new Date(today.getFullYear(), 0, 1);
+  } else if (range === "month") {
+    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+  } else if (range === "last30") {
+    startDate = new Date(today); startDate.setDate(today.getDate() - 30);
+  } else if (range === "last90") {
+    startDate = new Date(today); startDate.setDate(today.getDate() - 90);
+  } else if (range === "last365") {
+    startDate = new Date(today); startDate.setDate(today.getDate() - 365);
+  } else if (range === "custom") {
+    const s = els.reportsStart?.value;
+    const e = els.reportsEnd?.value;
+    startDate = s ? parseDateKey(s) : null;
+    endDate = e ? parseDateKey(e) : today;
+  }
+
+  const inRange = (trade) => {
+    if (!trade.closeDate) return false;
+    const d = parseDateKey(trade.closeDate);
+    if (startDate && d < startDate) return false;
+    if (endDate && d > endDate) return false;
+    return true;
+  };
+  const trades = state.trades.filter(isClosedTrade).filter(inRange);
+  const formatRangeLabel = (start, end) => {
+    if (!start) return `All time → ${formatShortDate(toDateKey(end))}`;
+    return `${formatShortDate(toDateKey(start))} → ${formatShortDate(toDateKey(end))}`;
+  };
+  if (els.reportsRangeLabel) {
+    els.reportsRangeLabel.textContent = formatRangeLabel(startDate, endDate);
+  }
+
+  // Comprehensive stats
+  const stats = computeReportsStats(trades);
+  els.reportsStatsGrid.innerHTML = renderReportsStatsCards(stats);
+
+  // Day-of-week or month breakdown
+  const tab = state.reportsTab || "days";
+  if (tab === "days") {
+    renderReportsBreakdown(trades, "dow");
+    if (els.reportsBreakdownLabel) els.reportsBreakdownLabel.textContent = "Day";
+  } else {
+    renderReportsBreakdown(trades, "month");
+    if (els.reportsBreakdownLabel) els.reportsBreakdownLabel.textContent = "Month";
+  }
+}
+
+function computeReportsStats(trades) {
+  const winners = trades.filter((t) => t.netPnl > 0);
+  const losers = trades.filter((t) => t.netPnl < 0);
+  const totalPnl = sum(trades.map((t) => t.netPnl));
+  const grossWin = sum(winners.map((t) => t.netPnl));
+  const grossLoss = sum(losers.map((t) => t.netPnl));
+  const avgWin = winners.length ? grossWin / winners.length : 0;
+  const avgLoss = losers.length ? grossLoss / losers.length : 0;
+  const winRate = trades.length ? (winners.length / trades.length) * 100 : 0;
+  const profitFactor = grossLoss !== 0 ? Math.abs(grossWin / grossLoss) : (grossWin > 0 ? 99 : 0);
+  const expectancy = trades.length ? totalPnl / trades.length : 0;
+
+  // Group by date for daily/drawdown stats
+  const daily = new Map();
+  trades.forEach((t) => {
+    if (!daily.has(t.closeDate)) daily.set(t.closeDate, 0);
+    daily.set(t.closeDate, daily.get(t.closeDate) + t.netPnl);
+  });
+  const dailyEntries = [...daily.entries()].sort();
+  const winningDays = dailyEntries.filter(([, v]) => v > 0).length;
+  const losingDays = dailyEntries.filter(([, v]) => v < 0).length;
+  const breakEvenDays = dailyEntries.filter(([, v]) => v === 0).length;
+  const totalTradingDays = dailyEntries.length;
+
+  // Drawdown calc (peak-to-trough on running cumulative P&L)
+  let running = 0; let peak = 0; let maxDrawdown = 0;
+  dailyEntries.forEach(([, v]) => {
+    running += v;
+    peak = Math.max(peak, running);
+    maxDrawdown = Math.min(maxDrawdown, running - peak);
+  });
+
+  // Streaks
+  let curWinStreak = 0, maxWinStreak = 0, curLoseStreak = 0, maxLoseStreak = 0;
+  dailyEntries.forEach(([, v]) => {
+    if (v > 0) { curWinStreak += 1; curLoseStreak = 0; }
+    else if (v < 0) { curLoseStreak += 1; curWinStreak = 0; }
+    else { curWinStreak = 0; curLoseStreak = 0; }
+    maxWinStreak = Math.max(maxWinStreak, curWinStreak);
+    maxLoseStreak = Math.max(maxLoseStreak, curLoseStreak);
+  });
+
+  const largestWin = winners.length ? Math.max(...winners.map((t) => t.netPnl)) : 0;
+  const largestLoss = losers.length ? Math.min(...losers.map((t) => t.netPnl)) : 0;
+  const avgDailyPnl = totalTradingDays ? totalPnl / totalTradingDays : 0;
+  const avgWinningDayPnl = winningDays ? sum(dailyEntries.filter(([, v]) => v > 0).map(([, v]) => v)) / winningDays : 0;
+  const avgLosingDayPnl = losingDays ? sum(dailyEntries.filter(([, v]) => v < 0).map(([, v]) => v)) / losingDays : 0;
+  const largestProfitDay = dailyEntries.length ? Math.max(...dailyEntries.map(([, v]) => v)) : 0;
+  const largestLossDay = dailyEntries.length ? Math.min(...dailyEntries.map(([, v]) => v)) : 0;
+
+  return {
+    totalPnl, totalTrades: trades.length, winners: winners.length, losers: losers.length,
+    winRate, avgWin, avgLoss, expectancy, profitFactor,
+    largestWin, largestLoss,
+    totalTradingDays, winningDays, losingDays, breakEvenDays,
+    avgDailyPnl, avgWinningDayPnl, avgLosingDayPnl,
+    largestProfitDay, largestLossDay,
+    maxDrawdown, maxWinStreak, maxLoseStreak,
+  };
+}
+
+function renderReportsStatsCards(s) {
+  const cell = (label, value, klass = "") =>
+    `<div class="reports-stat"><span>${escapeHtml(label)}</span><strong class="${klass}">${value}</strong></div>`;
+  return [
+    cell("Total P&L", money(s.totalPnl), s.totalPnl >= 0 ? "positive" : "negative"),
+    cell("Total trades", s.totalTrades),
+    cell("Win rate", `${s.winRate.toFixed(2)}%`),
+    cell("Profit factor", s.profitFactor >= 99 ? "99+" : s.profitFactor.toFixed(2)),
+    cell("Avg trade P&L", money(s.expectancy), s.expectancy >= 0 ? "positive" : "negative"),
+    cell("Avg winning trade", money(s.avgWin), "positive"),
+    cell("Avg losing trade", money(s.avgLoss), "negative"),
+    cell("Largest win", money(s.largestWin), "positive"),
+    cell("Largest loss", money(s.largestLoss), "negative"),
+    cell("Total trading days", s.totalTradingDays),
+    cell("Winning days", s.winningDays),
+    cell("Losing days", s.losingDays),
+    cell("Avg daily P&L", money(s.avgDailyPnl), s.avgDailyPnl >= 0 ? "positive" : "negative"),
+    cell("Avg winning day", money(s.avgWinningDayPnl), "positive"),
+    cell("Avg losing day", money(s.avgLosingDayPnl), "negative"),
+    cell("Largest profitable day", money(s.largestProfitDay), "positive"),
+    cell("Largest losing day", money(s.largestLossDay), "negative"),
+    cell("Max drawdown", money(s.maxDrawdown), s.maxDrawdown < 0 ? "negative" : ""),
+    cell("Max consecutive winning days", s.maxWinStreak),
+    cell("Max consecutive losing days", s.maxLoseStreak),
+  ].join("");
+}
+
+function renderReportsBreakdown(trades, mode) {
+  // Build buckets keyed by either day-of-week (0..6) or month (YYYY-MM)
+  const buckets = new Map();
+  const labels = mode === "dow"
+    ? ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    : null;
+
+  // Day-level rollups (so win-rate is per-day, not per-trade — matches Tradezella's screenshot)
+  const dailyByBucket = new Map();
+  trades.forEach((trade) => {
+    const date = parseDateKey(trade.closeDate);
+    const key = mode === "dow" ? String(date.getDay()) : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!buckets.has(key)) buckets.set(key, { trades: 0, totalPnl: 0, winsTrades: 0, winSum: 0, lossSum: 0, winLossCount: 0, lossesTrades: 0 });
+    const bucket = buckets.get(key);
+    bucket.trades += 1;
+    bucket.totalPnl += trade.netPnl;
+    if (trade.netPnl > 0) { bucket.winsTrades += 1; bucket.winSum += trade.netPnl; }
+    else if (trade.netPnl < 0) { bucket.lossesTrades += 1; bucket.lossSum += trade.netPnl; }
+
+    if (!dailyByBucket.has(key)) dailyByBucket.set(key, new Map());
+    const dayMap = dailyByBucket.get(key);
+    dayMap.set(trade.closeDate, (dayMap.get(trade.closeDate) || 0) + trade.netPnl);
+  });
+
+  const rows = [...buckets.entries()].map(([key, b]) => {
+    const dayMap = dailyByBucket.get(key) || new Map();
+    const dayTotals = [...dayMap.values()];
+    const winningDays = dayTotals.filter((v) => v > 0).length;
+    const totalDays = dayTotals.length;
+    const dayWinRate = totalDays ? (winningDays / totalDays) * 100 : 0;
+    const avgWin = b.winsTrades ? b.winSum / b.winsTrades : 0;
+    const avgLoss = b.lossesTrades ? b.lossSum / b.lossesTrades : 0;
+    const expectancy = b.trades ? b.totalPnl / b.trades : 0;
+    const label = mode === "dow" ? labels[Number(key)] : key;
+    return { key, label, ...b, dayWinRate, avgWin, avgLoss, expectancy };
+  }).sort((a, b) => mode === "dow" ? Number(a.key) - Number(b.key) : a.key.localeCompare(b.key));
+
+  // Highlight cards (only meaningful for dow)
+  if (mode === "dow") {
+    const withTrades = rows.filter((r) => r.trades > 0);
+    const best = withTrades.reduce((acc, r) => (!acc || r.totalPnl > acc.totalPnl) ? r : acc, null);
+    const worst = withTrades.reduce((acc, r) => (!acc || r.totalPnl < acc.totalPnl) ? r : acc, null);
+    const active = withTrades.reduce((acc, r) => (!acc || r.trades > acc.trades) ? r : acc, null);
+    const bestWin = withTrades.reduce((acc, r) => (!acc || r.dayWinRate > acc.dayWinRate) ? r : acc, null);
+    const setHighlight = (labelEl, valEl, row, format) => {
+      if (!labelEl || !valEl) return;
+      if (!row) { labelEl.textContent = "--"; valEl.textContent = "--"; return; }
+      labelEl.textContent = row.label;
+      valEl.textContent = format(row);
+    };
+    setHighlight(els.reportsBestDay, els.reportsBestDayValue, best, (r) => `${r.trades} trades · ${money(r.totalPnl)}`);
+    setHighlight(els.reportsWorstDay, els.reportsWorstDayValue, worst, (r) => `${r.trades} trades · ${money(r.totalPnl)}`);
+    setHighlight(els.reportsActiveDay, els.reportsActiveDayValue, active, (r) => `${r.trades} trades`);
+    setHighlight(els.reportsBestWinDay, els.reportsBestWinDayValue, bestWin, (r) => `${r.dayWinRate.toFixed(0)}% · ${r.trades} trades`);
+  } else {
+    // Hide/clear highlight cards for month view (less meaningful at this granularity)
+    [els.reportsBestDay, els.reportsWorstDay, els.reportsActiveDay, els.reportsBestWinDay].forEach((el) => { if (el) el.textContent = "--"; });
+    [els.reportsBestDayValue, els.reportsWorstDayValue, els.reportsActiveDayValue, els.reportsBestWinDayValue].forEach((el) => { if (el) el.textContent = "--"; });
+  }
+
+  // Bar chart
+  if (els.reportsBreakdownChart) {
+    if (!rows.length) {
+      els.reportsBreakdownChart.innerHTML = `<div class="empty-chart">No trades in this date range</div>`;
+    } else {
+      const series = rows.map((r) => ({ label: r.label, value: r.totalPnl }));
+      els.reportsBreakdownChart.innerHTML = renderReportsBars(series);
+      attachChartTooltip(els.reportsBreakdownChart);
+    }
+  }
+
+  // Table
+  if (els.reportsBreakdownTable) {
+    if (!rows.length) {
+      els.reportsBreakdownTable.innerHTML = `<tr><td colspan="7">No trades in this date range.</td></tr>`;
+    } else {
+      els.reportsBreakdownTable.innerHTML = rows.map((r) => `<tr>
+        <td>${escapeHtml(r.label)}</td>
+        <td>${r.trades}</td>
+        <td>${r.dayWinRate.toFixed(1)}%</td>
+        <td class="${r.totalPnl >= 0 ? "positive" : "negative"}">${money(r.totalPnl)}</td>
+        <td class="positive">${money(r.avgWin)}</td>
+        <td class="negative">${money(r.avgLoss)}</td>
+        <td class="${r.expectancy >= 0 ? "positive" : "negative"}">${money(r.expectancy)}</td>
+      </tr>`).join("");
+    }
+  }
+}
+
+function renderReportsBars(series) {
+  const width = 720;
+  const height = 220;
+  const pad = { top: 16, right: 14, bottom: 38, left: 60 };
+  const values = series.map((p) => p.value);
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, 0);
+  const spread = (max - min) || 1;
+  const xStep = (width - pad.left - pad.right) / Math.max(series.length, 1);
+  const y = (v) => pad.top + (1 - (v - min) / spread) * (height - pad.top - pad.bottom);
+  const zero = y(0);
+  const ticks = makeTicks(min, max, 5);
+  return `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Reports breakdown bar chart">
+    ${ticks.map((tick) => `<line class="grid-line" x1="${pad.left}" y1="${y(tick)}" x2="${width - pad.right}" y2="${y(tick)}"/>
+      <text class="axis-label" x="${pad.left - 8}" y="${y(tick) + 3}" text-anchor="end">${moneyCompact(tick)}</text>`).join("")}
+    <line class="zero-line" x1="${pad.left}" y1="${zero}" x2="${width - pad.right}" y2="${zero}"/>
+    ${series.map((point, index) => {
+      const cx = pad.left + index * xStep + xStep / 2;
+      const barWidth = Math.max(4, xStep * 0.7);
+      const barX = cx - barWidth / 2;
+      const barY = point.value >= 0 ? y(point.value) : zero;
+      const barH = Math.max(1, Math.abs(y(point.value) - zero));
+      return `<rect class="${point.value >= 0 ? "bar-positive" : "bar-negative"} chart-hit-fill" x="${barX}" y="${barY}" width="${barWidth}" height="${barH}" rx="2" data-chart-tip="${escapeHtml(`${point.label}: ${money(point.value)}`)}"/>
+        <text class="axis-label" x="${cx}" y="${height - 12}" text-anchor="middle">${escapeHtml(String(point.label).slice(0, 3))}</text>`;
+    }).join("")}
+  </svg>`;
+}
+
+function openJournalImagePreview(src) {
+  const existing = document.querySelector(".journal-image-modal");
+  if (existing) existing.remove();
+  const modal = document.createElement("div");
+  modal.className = "journal-image-modal";
+  modal.innerHTML = `<button class="journal-image-close" aria-label="Close">×</button><img src="${src}" alt="Chart screenshot enlarged" />`;
+  modal.addEventListener("click", () => modal.remove());
+  document.body.appendChild(modal);
 }
 
 function renderLineChart(container, series, options = {}) {
