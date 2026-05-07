@@ -3252,6 +3252,240 @@ svg.radar-svg {
   .reports-highlight-grid { grid-template-columns: 1fr; }
 }
 
+/* ----------------------------------------------------------------
+   Day events: calendar dot, day modal chips, journal day card pills
+   ---------------------------------------------------------------- */
+
+/* Red dot inside the calendar day cell when events are tagged */
+.calendar-day { position: relative; }
+
+.day-event-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 2px var(--panel);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .day-event-dot {
+  box-shadow: 0 0 0 2px var(--panel);
+}
+
+/* Day modal: events chip row */
+.day-events-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px 0;
+  border-top: 1px solid var(--soft-line);
+  margin-top: -2px;
+}
+
+.day-events-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.day-events-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex: 0 1 auto;
+  min-height: 24px;
+  align-items: center;
+}
+
+.day-event-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(255, 102, 109, 0.13);
+  color: var(--red-dark);
+  border: 1px solid rgba(255, 102, 109, 0.3);
+}
+
+.day-event-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--red-dark);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.day-event-remove:hover { background: rgba(255, 102, 109, 0.2); }
+
+.day-events-empty {
+  font-size: 12px;
+  color: var(--subtle);
+  font-style: italic;
+}
+
+.day-events-input {
+  flex: 1;
+  min-width: 180px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.day-events-input:focus {
+  outline: none;
+  border-color: var(--purple);
+  background: var(--panel);
+}
+
+[data-theme="dark"] .day-events-row {
+  border-top-color: var(--line);
+}
+[data-theme="dark"] .day-event-chip {
+  background: rgba(255, 123, 128, 0.18);
+  color: #ffa3a8;
+  border-color: rgba(255, 123, 128, 0.4);
+}
+[data-theme="dark"] .day-event-remove { color: #ffa3a8; }
+[data-theme="dark"] .day-events-input { background: #1f1a2b; }
+
+/* Journal day-card event pills */
+.journal-day-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.journal-day-event-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 102, 109, 0.13);
+  color: var(--red-dark);
+  border: 1px solid rgba(255, 102, 109, 0.3);
+}
+
+[data-theme="dark"] .journal-day-event-chip {
+  background: rgba(255, 123, 128, 0.18);
+  color: #ffa3a8;
+  border-color: rgba(255, 123, 128, 0.4);
+}
+
+/* ----------------------------------------------------------------
+   Custom rules in the Rules dialog + Progress page checklist toggle
+   ---------------------------------------------------------------- */
+
+.custom-rules-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.custom-rules-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--soft-line);
+  font-size: 12.5px;
+}
+
+.custom-rules-list li.custom-rules-empty {
+  justify-content: center;
+  color: var(--subtle);
+  font-style: italic;
+  background: transparent;
+  border: 1px dashed var(--line);
+}
+
+.custom-rule-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--red-dark);
+  font-size: 16px;
+  cursor: pointer;
+}
+.custom-rule-remove:hover { background: rgba(255, 102, 109, 0.15); }
+
+.custom-rules-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.custom-rules-add input {
+  flex: 1;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+[data-theme="dark"] .custom-rules-list li {
+  background: #1f1a2b;
+}
+
+[data-theme="dark"] .custom-rules-add input {
+  background: #1f1a2b;
+}
+
+/* Toggleable custom rule on the daily checklist (Progress page) */
+.checklist-toggle {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-align: center;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 100ms ease;
+}
+
+.checklist-toggle:hover {
+  background: rgba(132, 120, 232, 0.15);
+}
+
+.checklist-item.custom {
+  cursor: default;
+}
+
 /* Inline setup-tag input inside the day modal trade table */
 .setup-tag-input {
   width: 100%;

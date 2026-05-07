@@ -573,6 +573,23 @@
           <div class="day-stat"><span>Volume</span><strong id="dayVolume">0</strong></div>
           <div class="day-stat"><span>Profit Factor</span><strong id="dayDialogProfitFactor">0.00</strong></div>
         </div>
+        <div class="day-events-row">
+          <span class="day-events-label">Events</span>
+          <div id="dayEventsChips" class="day-events-chips"></div>
+          <input id="dayEventsInput" class="day-events-input" type="text" list="dayEventsSuggestions" placeholder="Add event (Red Folder News, NVDA earnings, FOMC...)" />
+          <datalist id="dayEventsSuggestions">
+            <option value="Red Folder News"></option>
+            <option value="FOMC"></option>
+            <option value="CPI"></option>
+            <option value="PCE"></option>
+            <option value="NFP"></option>
+            <option value="GDP"></option>
+            <option value="Jobless Claims"></option>
+            <option value="Earnings"></option>
+            <option value="Powell Speech"></option>
+            <option value="Tariff News"></option>
+          </datalist>
+        </div>
         <div class="day-table-wrap">
           <table class="day-table">
             <thead>
@@ -682,8 +699,12 @@
           </label>
           <div class="manual-rule-box">
             <strong>Manual rules</strong>
-            <span>The rule will be added as a daily checklist item.</span>
-            <button class="link-button" type="button">Add rule</button>
+            <span>Custom checklist items you tick off each day from the Progress page.</span>
+            <ul id="customRulesList" class="custom-rules-list"></ul>
+            <div class="custom-rules-add">
+              <input id="customRuleInput" type="text" placeholder="No revenge trading after a loss" maxlength="80" />
+              <button id="customRuleAdd" class="link-button" type="button">Add rule</button>
+            </div>
           </div>
         </section>
         <footer>

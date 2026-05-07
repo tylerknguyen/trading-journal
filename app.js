@@ -3,6 +3,7 @@ const JOURNAL_KEY = "tradezella_local_journal_v1";
 const DATA_KEY = "tradezella_local_trades_v1";
 const META_KEY = "tradezella_local_import_meta_v1";
 const RULES_KEY = "trading_journal_rules_v1";
+const EVENTS_KEY = "trading_journal_day_events_v1";
 const WEBULL_SYNC_COOLDOWN_KEY = "trading_journal_webull_sync_cooldown_until_v1";
 const THEME_KEY = "trading_journal_theme_v1";
 
@@ -18,6 +19,8 @@ const THEME_KEY = "trading_journal_theme_v1";
 })();
 
 const defaultRules = {
+  customRules: [],
+  customCompletion: {},
   tradingDays: [1, 2, 3, 4, 5],
   emailReminder: true,
   reminderTime: "21:15",
@@ -122,6 +125,7 @@ const state = {
   selectedDayTradeIds: new Set(),
   reportsTab: "days",
   pendingChartImage: null,
+  dayEvents: loadDayEvents(),
 };
 
 const els = {
@@ -219,6 +223,9 @@ const els = {
   ruleMaxLossDay: document.querySelector("#ruleMaxLossDay"),
   ruleMaxLossDayValue: document.querySelector("#ruleMaxLossDayValue"),
   saveRulesButton: document.querySelector("#saveRulesButton"),
+  customRulesList: document.querySelector("#customRulesList"),
+  customRuleInput: document.querySelector("#customRuleInput"),
+  customRuleAdd: document.querySelector("#customRuleAdd"),
   resetProgressButton: document.querySelector("#resetProgressButton"),
   tradePageDate: document.querySelector("#tradePageDate"),
   tradePageDayStats: document.querySelector("#tradePageDayStats"),
@@ -277,6 +284,8 @@ const els = {
   reportsBreakdownChart: document.querySelector("#reportsBreakdownChart"),
   reportsBreakdownLabel: document.querySelector("#reportsBreakdownLabel"),
   reportsBreakdownTable: document.querySelector("#reportsBreakdownTable"),
+  dayEventsChips: document.querySelector("#dayEventsChips"),
+  dayEventsInput: document.querySelector("#dayEventsInput"),
   journalTotalTrades: document.querySelector("#journalTotalTrades"),
   journaledTrades: document.querySelector("#journaledTrades"),
   journalMissingTrades: document.querySelector("#journalMissingTrades"),
@@ -518,11 +527,42 @@ function bindEvents() {
   els.viewProgressDayButton.addEventListener("click", () => switchView("day"));
   els.saveRulesButton.addEventListener("click", saveRules);
   els.resetProgressButton.addEventListener("click", resetRulesProgress);
+  if (els.customRuleAdd) els.customRuleAdd.addEventListener("click", addCustomRuleFromInput);
+  if (els.customRuleInput) {
+    els.customRuleInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addCustomRuleFromInput();
+      }
+    });
+  }
   els.tradeBackButton.addEventListener("click", () => switchView("day"));
   els.tradeJournalButton.addEventListener("click", () => {
     if (state.activeTradeId) openJournal(state.activeTradeId);
   });
   els.markReviewedButton.addEventListener("click", markActiveTradeReviewed);
+
+  // Day events: add on Enter or comma; chips render in renderDayEvents
+  if (els.dayEventsInput) {
+    const commitDayEvent = () => {
+      if (!state.selectedDay) return;
+      const value = els.dayEventsInput.value;
+      if (!value.trim()) return;
+      // Allow comma-separated entry: "FOMC, NVDA Earnings"
+      value.split(",").forEach((part) => addDayEvent(state.selectedDay, part));
+      els.dayEventsInput.value = "";
+      renderDayEvents(state.selectedDay);
+      render();
+      if (state.activeView === "journal") renderJournalPage();
+    };
+    els.dayEventsInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === ",") {
+        event.preventDefault();
+        commitDayEvent();
+      }
+    });
+    els.dayEventsInput.addEventListener("blur", commitDayEvent);
+  }
   document.querySelectorAll("[data-trade-tab]").forEach((tab) => {
     tab.addEventListener("click", () => {
       state.activeTradeTab = tab.dataset.tradeTab;
@@ -694,6 +734,49 @@ function persistJournals() {
 
 function persistRules() {
   localStorage.setItem(RULES_KEY, JSON.stringify(state.rules));
+}
+
+function loadDayEvents() {
+  try {
+    return JSON.parse(localStorage.getItem(EVENTS_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function persistDayEvents() {
+  localStorage.setItem(EVENTS_KEY, JSON.stringify(state.dayEvents));
+}
+
+function getDayEvents(dateKey) {
+  if (!dateKey) return [];
+  const list = state.dayEvents?.[dateKey];
+  return Array.isArray(list) ? list : [];
+}
+
+function setDayEvents(dateKey, events) {
+  if (!dateKey) return;
+  if (!state.dayEvents) state.dayEvents = {};
+  const cleaned = (events || []).map((e) => String(e).trim()).filter(Boolean);
+  if (cleaned.length) state.dayEvents[dateKey] = cleaned;
+  else delete state.dayEvents[dateKey];
+  persistDayEvents();
+}
+
+function addDayEvent(dateKey, label) {
+  if (!dateKey) return false;
+  const trimmed = String(label || "").trim();
+  if (!trimmed) return false;
+  const current = getDayEvents(dateKey);
+  // Case-insensitive de-dupe: don't add an event that's already there
+  if (current.some((e) => e.toLowerCase() === trimmed.toLowerCase())) return false;
+  setDayEvents(dateKey, [...current, trimmed]);
+  return true;
+}
+
+function removeDayEvent(dateKey, label) {
+  const current = getDayEvents(dateKey);
+  setDayEvents(dateKey, current.filter((e) => e !== label));
 }
 
 function renderImportMeta() {
@@ -1410,8 +1493,13 @@ function renderCalendar(daily) {
           <strong>${money(info.pnl)}</strong>
           <span>${info.trades.length} trades</span>
         </div>` : "";
+      const events = getDayEvents(key);
+      const eventDot = events.length
+        ? `<span class="day-event-dot" title="${escapeHtml(events.join(", "))}" aria-label="${events.length} event${events.length === 1 ? "" : "s"}: ${escapeHtml(events.join(", "))}"></span>`
+        : "";
       html += `<button type="button" class="calendar-day ${resultClass} ${info.trades.length ? "" : "no-trades"}" data-date="${key}" ${info.trades.length ? "" : "disabled"}>
         <span class="day-number">${date.getDate()}</span>
+        ${eventDot}
         ${result}
       </button>`;
     }
@@ -1461,10 +1549,30 @@ function openDayDialog(dateKey) {
   els.dayDialogProfitFactor.textContent = profitFactor >= 99 ? "99+" : profitFactor.toFixed(2);
   renderDayMiniChart(trades);
   renderDayTradeRows(trades);
+  renderDayEvents(dateKey);
   if (location.hash !== `#day=${dateKey}`) {
     history.replaceState(null, "", `#day=${dateKey}`);
   }
   if (!els.dayDialog.open) els.dayDialog.showModal();
+}
+
+function renderDayEvents(dateKey) {
+  if (!els.dayEventsChips) return;
+  const events = getDayEvents(dateKey);
+  els.dayEventsChips.innerHTML = events.length
+    ? events.map((evt) => `<span class="day-event-chip">${escapeHtml(evt)}<button type="button" class="day-event-remove" data-event="${escapeHtml(evt)}" aria-label="Remove ${escapeHtml(evt)}">×</button></span>`).join("")
+    : `<span class="day-events-empty">No events tagged.</span>`;
+  els.dayEventsChips.querySelectorAll(".day-event-remove").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removeDayEvent(state.selectedDay, btn.dataset.event);
+      renderDayEvents(state.selectedDay);
+      // Re-render any surface that displays events
+      render();
+      if (state.activeView === "journal") renderJournalPage();
+    });
+  });
 }
 
 function renderDayTradeRows(trades) {
@@ -1753,11 +1861,26 @@ function renderProgressPage() {
   els.progressTodayScore.textContent = `${passed}/${checks.length}`;
   els.progressTodayBar.style.width = `${checks.length ? passed / checks.length * 100 : 0}%`;
   els.dailyChecklistTitle.textContent = `Daily checklist, ${monthShort(parseDateKey(dayKey))} ${parseDateKey(dayKey).getDate()}`;
-  els.progressChecklist.innerHTML = checks.map((item) => `<div class="${item.passed ? "passed" : "failed"}">
-    <span>${item.passed ? "OK" : "NO"}</span>
-    <strong>${escapeHtml(item.label)}</strong>
-    <em>${escapeHtml(item.value)}</em>
-  </div>`).join("");
+  els.progressChecklist.innerHTML = checks.map((item) => {
+    if (item.custom) {
+      return `<div class="checklist-item custom ${item.passed ? "passed" : "failed"}" data-rule-id="${escapeHtml(item.ruleId)}">
+        <button type="button" class="checklist-toggle" data-rule-id="${escapeHtml(item.ruleId)}" aria-pressed="${item.passed}">${item.passed ? "OK" : "NO"}</button>
+        <strong>${escapeHtml(item.label)}</strong>
+        <em>${escapeHtml(item.value)}</em>
+      </div>`;
+    }
+    return `<div class="checklist-item ${item.passed ? "passed" : "failed"}">
+      <span>${item.passed ? "OK" : "NO"}</span>
+      <strong>${escapeHtml(item.label)}</strong>
+      <em>${escapeHtml(item.value)}</em>
+    </div>`;
+  }).join("");
+  els.progressChecklist.querySelectorAll(".checklist-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      toggleCustomRuleCompletion(state.selectedDay, btn.dataset.ruleId);
+      renderProgressPage();
+    });
+  });
   renderHeatmapInto(els.progressPageHeatmap, daily, 216);
   renderRulesTable(daily);
 }
@@ -1783,13 +1906,39 @@ function evaluateDayRules(dayKey, trades) {
   const earliest = trades.map((trade) => timeToMinutes(trade.openTime || tradeOpenTime(trade))).sort((a, b) => a - b)[0];
   const dayPnl = sum(trades.map((trade) => trade.netPnl));
   const maxTradeLoss = Math.max(0, ...trades.map((trade) => trade.netPnl < 0 ? Math.abs(trade.netPnl) : 0));
-  return [
+  const baseChecks = [
     { label: "Start my day by", passed: !state.rules.startDay || !trades.length || earliest <= timeToMinutes(state.rules.startTime), value: state.rules.startTime },
     { label: "Link trades to playbook", passed: !state.rules.linkPlaybook || trades.every((trade) => state.journals[trade.id]?.strategy), value: `${trades.filter((trade) => state.journals[trade.id]?.strategy).length} / ${trades.length}` },
     { label: "Input Stop loss to all trades", passed: !state.rules.stopLoss || trades.every((trade) => state.journals[trade.id]?.stopLoss), value: `${trades.filter((trade) => state.journals[trade.id]?.stopLoss).length} / ${trades.length}` },
     { label: "Net max loss /trade", passed: !state.rules.maxLossTrade || maxTradeLoss <= state.rules.maxLossTradeValue, value: `${money(maxTradeLoss)} / ${money(state.rules.maxLossTradeValue)}` },
     { label: "Net max loss /day", passed: !state.rules.maxLossDay || dayPnl >= -state.rules.maxLossDayValue, value: `${money(Math.abs(Math.min(0, dayPnl)))} / ${money(state.rules.maxLossDayValue)}` },
   ];
+  const customRules = Array.isArray(state.rules.customRules) ? state.rules.customRules : [];
+  const completion = state.rules.customCompletion?.[dayKey] || {};
+  const customChecks = customRules.map((rule) => ({
+    label: rule.label,
+    passed: Boolean(completion[rule.id]),
+    value: completion[rule.id] ? "Done" : "Not yet",
+    custom: true,
+    ruleId: rule.id,
+  }));
+  return [...baseChecks, ...customChecks];
+}
+
+function toggleCustomRuleCompletion(dayKey, ruleId) {
+  if (!dayKey || !ruleId) return;
+  if (!state.rules.customCompletion) state.rules.customCompletion = {};
+  if (!state.rules.customCompletion[dayKey]) state.rules.customCompletion[dayKey] = {};
+  const current = Boolean(state.rules.customCompletion[dayKey][ruleId]);
+  if (current) {
+    delete state.rules.customCompletion[dayKey][ruleId];
+    if (!Object.keys(state.rules.customCompletion[dayKey]).length) {
+      delete state.rules.customCompletion[dayKey];
+    }
+  } else {
+    state.rules.customCompletion[dayKey][ruleId] = true;
+  }
+  persistRules();
 }
 
 function renderRuleControls() {
@@ -1812,11 +1961,57 @@ function openRulesDialog() {
   els.ruleMaxLossTradeValue.value = state.rules.maxLossTradeValue;
   els.ruleMaxLossDay.checked = state.rules.maxLossDay;
   els.ruleMaxLossDayValue.value = state.rules.maxLossDayValue;
+  renderCustomRulesList();
   els.rulesDialog.showModal();
+}
+
+function renderCustomRulesList() {
+  if (!els.customRulesList) return;
+  const rules = Array.isArray(state.rules.customRules) ? state.rules.customRules : [];
+  if (!rules.length) {
+    els.customRulesList.innerHTML = `<li class="custom-rules-empty">No custom rules yet. Add one below.</li>`;
+    return;
+  }
+  els.customRulesList.innerHTML = rules.map((rule) => `<li>
+    <span>${escapeHtml(rule.label)}</span>
+    <button type="button" class="custom-rule-remove" data-rule-id="${escapeHtml(rule.id)}" aria-label="Remove ${escapeHtml(rule.label)}">×</button>
+  </li>`).join("");
+  els.customRulesList.querySelectorAll(".custom-rule-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const ruleId = btn.dataset.ruleId;
+      state.rules.customRules = (state.rules.customRules || []).filter((rule) => rule.id !== ruleId);
+      // Also clean up any completion entries pointing at the removed rule
+      Object.keys(state.rules.customCompletion || {}).forEach((day) => {
+        if (state.rules.customCompletion[day]?.[ruleId]) {
+          delete state.rules.customCompletion[day][ruleId];
+          if (!Object.keys(state.rules.customCompletion[day]).length) {
+            delete state.rules.customCompletion[day];
+          }
+        }
+      });
+      persistRules();
+      renderCustomRulesList();
+    });
+  });
+}
+
+function addCustomRuleFromInput() {
+  if (!els.customRuleInput) return;
+  const label = els.customRuleInput.value.trim();
+  if (!label) return;
+  if (!Array.isArray(state.rules.customRules)) state.rules.customRules = [];
+  // Generate a stable-ish id (timestamp + random suffix) so completion records
+  // survive label edits if we ever support those
+  const id = `cr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  state.rules.customRules.push({ id, label });
+  persistRules();
+  els.customRuleInput.value = "";
+  renderCustomRulesList();
 }
 
 function saveRules() {
   state.rules = {
+    ...state.rules,
     tradingDays: [...els.ruleTradingDays.querySelectorAll(".active")].map((button) => Number(button.dataset.weekday)),
     emailReminder: els.ruleEmailReminder.checked,
     reminderTime: els.ruleReminderTime.value || "21:15",
@@ -1828,6 +2023,10 @@ function saveRules() {
     maxLossTradeValue: number(els.ruleMaxLossTradeValue.value || 100),
     maxLossDay: els.ruleMaxLossDay.checked,
     maxLossDayValue: number(els.ruleMaxLossDayValue.value || 100),
+    // Preserve customRules and customCompletion that were edited inline via the
+    // add/remove buttons (they persist directly through persistRules)
+    customRules: Array.isArray(state.rules.customRules) ? state.rules.customRules : [],
+    customCompletion: state.rules.customCompletion || {},
   };
   persistRules();
   els.rulesDialog.close();
@@ -2184,6 +2383,10 @@ function renderJournalDayCard(dateKey, dayTrades) {
   const collapseClass = journaledCount === 0 ? " collapsed" : "";
   const tradeRowsHtml = tradesByTime.map((trade) => renderJournalTradeRow(trade)).join("");
 
+  const events = getDayEvents(dateKey);
+  const eventChips = events.length
+    ? `<div class="journal-day-events">${events.map((evt) => `<span class="journal-day-event-chip">${escapeHtml(evt)}</span>`).join("")}</div>`
+    : "";
   return `<section class="journal-day-card${collapseClass}" data-date="${escapeHtml(dateKey)}">
     <button class="journal-day-toggle" type="button" aria-expanded="${journaledCount > 0}">
       <span class="journal-day-chevron" aria-hidden="true">▸</span>
@@ -2195,6 +2398,7 @@ function renderJournalDayCard(dateKey, dayTrades) {
           <span>${winRate.toFixed(0)}% win</span>
           <span class="journal-day-status ${allJournaled ? "done" : journaledCount > 0 ? "partial" : "todo"}">${journaledCount}/${dayTrades.length} journaled</span>
         </span>
+        ${eventChips}
       </div>
     </button>
     <div class="journal-day-body">${tradeRowsHtml}</div>
