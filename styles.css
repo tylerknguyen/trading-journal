@@ -2450,6 +2450,182 @@ svg.radar-svg {
 .chart-bar-clickable { cursor: pointer; }
 .chart-bar-clickable:hover { opacity: 0.85; }
 
+/* ----------------------------------------------------------------
+   Dark mode pass 2 — trade detail, day modal, journal, sub-cards
+   ---------------------------------------------------------------- */
+
+/* Major panel-like surfaces that hardcoded #fff */
+[data-theme="dark"] .day-view-card,
+[data-theme="dark"] .mini-month-card,
+[data-theme="dark"] .progress-card,
+[data-theme="dark"] .trade-shell,
+[data-theme="dark"] .trade-stat-panel,
+[data-theme="dark"] .chart-toolbar,
+[data-theme="dark"] .notes-block,
+[data-theme="dark"] .rules-card,
+[data-theme="dark"] .journal-summary-card,
+[data-theme="dark"] .insight-item,
+[data-theme="dark"] .insights-card,
+[data-theme="dark"] .day-card,
+[data-theme="dark"] .journal-card,
+[data-theme="dark"] .heat-cell {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+/* Recessed/inset surfaces (one shade darker than the panel) */
+[data-theme="dark"] .trade-list-panel,
+[data-theme="dark"] .day-trade-chip,
+[data-theme="dark"] .journal-stats div,
+[data-theme="dark"] .trade-input-card {
+  background: #110d1c;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+/* Day-view-card inner pieces */
+[data-theme="dark"] .day-view-card.selected {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 1px rgba(132, 120, 232, 0.5);
+}
+[data-theme="dark"] .day-view-card header {
+  border-bottom-color: var(--line);
+}
+[data-theme="dark"] .day-card header {
+  border-bottom-color: var(--line);
+}
+
+/* Trade detail page list (sidebar with trade list) */
+[data-theme="dark"] .trade-page-list button {
+  color: var(--ink);
+}
+[data-theme="dark"] .trade-page-list button:hover {
+  background: #1f1a2b;
+}
+[data-theme="dark"] .trade-page-list button.active {
+  background: rgba(132, 120, 232, 0.18);
+  color: #cabfff;
+}
+
+/* Execution overlay pills */
+[data-theme="dark"] .execution-overlay-list span {
+  background: rgba(132, 120, 232, 0.14);
+  color: var(--ink);
+}
+[data-theme="dark"] .execution-overlay-list .exit {
+  background: rgba(132, 120, 232, 0.28);
+  color: #cabfff;
+}
+
+/* Side-calendar buttons (mini calendar inside trade-detail / day-page) */
+[data-theme="dark"] .side-calendar button {
+  background: #1a1525;
+  color: var(--ink);
+  border-color: transparent;
+}
+[data-theme="dark"] .side-calendar button:hover {
+  background: #221b30;
+}
+[data-theme="dark"] .side-calendar button.active {
+  background: var(--purple);
+  color: #fff;
+}
+
+/* Tables hover row */
+[data-theme="dark"] .journal-table tr:hover td,
+[data-theme="dark"] .day-table tbody tr:hover td,
+[data-theme="dark"] .trades-table tbody tr:hover td {
+  background: #1f1a2b;
+}
+
+/* Small circular icon buttons (toolbar/section nav) */
+[data-theme="dark"] .day-expand,
+[data-theme="dark"] .icon-nav,
+[data-theme="dark"] .day-back-button {
+  background: #1f1a2b;
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme="dark"] .day-expand:hover,
+[data-theme="dark"] .icon-nav:hover {
+  background: #2a2438;
+}
+
+/* Sticky table headers used on Recent trades / Setups / etc. */
+[data-theme="dark"] table thead th,
+[data-theme="dark"] .journal-table thead th,
+[data-theme="dark"] .day-table thead th {
+  background: var(--panel);
+  color: var(--muted);
+  border-bottom-color: var(--line);
+}
+
+/* Journal status pill ("Journal" vs "Edit" indicator) */
+[data-theme="dark"] .journal-button {
+  background: rgba(132, 120, 232, 0.12);
+  color: #b9b0ff;
+  border-color: rgba(132, 120, 232, 0.35);
+}
+[data-theme="dark"] .journal-button.has-journal {
+  background: rgba(67, 200, 154, 0.12);
+  color: #5edab0;
+  border-color: rgba(67, 200, 154, 0.35);
+}
+
+/* Mini journal button (inside day-modal trade rows) */
+[data-theme="dark"] .mini-journal-button {
+  background: rgba(132, 120, 232, 0.12);
+  color: #b9b0ff;
+  border-color: rgba(132, 120, 232, 0.35);
+}
+
+/* Form controls (textarea + select catch-all in dark) */
+[data-theme="dark"] textarea,
+[data-theme="dark"] .journal-controls select,
+[data-theme="dark"] .journal-controls input,
+[data-theme="dark"] dialog input,
+[data-theme="dark"] dialog select,
+[data-theme="dark"] dialog textarea {
+  background: #1f1a2b;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+/* Day-card-stat (within day modal) */
+[data-theme="dark"] .day-card-stat {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+/* Backdrop a hair darker so dialogs pop on dark page */
+[data-theme="dark"] .day-dialog::backdrop,
+[data-theme="dark"] dialog::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* Misc text colors that hardcode dark text and become unreadable on panel */
+[data-theme="dark"] .day-card-stat strong,
+[data-theme="dark"] .trade-day-title,
+[data-theme="dark"] .trade-day-title p,
+[data-theme="dark"] .trade-stat-panel h3,
+[data-theme="dark"] .trade-stat-panel strong,
+[data-theme="dark"] .insight-item strong,
+[data-theme="dark"] .notes-block strong,
+[data-theme="dark"] .day-card-trades strong {
+  color: var(--ink);
+}
+
+/* Pill / badge surfaces that used soft-purple/grey backgrounds */
+[data-theme="dark"] .ticker-pill,
+[data-theme="dark"] .pill,
+[data-theme="dark"] .badge,
+[data-theme="dark"] .tag-pill {
+  background: rgba(132, 120, 232, 0.12);
+  color: var(--ink);
+  border-color: rgba(132, 120, 232, 0.3);
+}
+
 /* Inline setup-tag input inside the day modal trade table */
 .setup-tag-input {
   width: 100%;
