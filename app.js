@@ -22,6 +22,8 @@ const defaultRules = {
   customRules: [],
   customCompletion: {},
   tradingDays: [1, 2, 3, 4, 5],
+  stopTrading: false,
+  stopTime: "15:30",
   emailReminder: true,
   reminderTime: "21:15",
   startDay: true,
@@ -216,6 +218,8 @@ const els = {
   ruleReminderTime: document.querySelector("#ruleReminderTime"),
   ruleStartDay: document.querySelector("#ruleStartDay"),
   ruleStartTime: document.querySelector("#ruleStartTime"),
+  ruleStopTrading: document.querySelector("#ruleStopTrading"),
+  ruleStopTime: document.querySelector("#ruleStopTime"),
   ruleLinkPlaybook: document.querySelector("#ruleLinkPlaybook"),
   ruleStopLoss: document.querySelector("#ruleStopLoss"),
   ruleMaxLossTrade: document.querySelector("#ruleMaxLossTrade"),
@@ -269,6 +273,7 @@ const els = {
   journalExpandAll: document.querySelector("#journalExpandAll"),
   journalCollapseAll: document.querySelector("#journalCollapseAll"),
   reportsRange: document.querySelector("#reportsRange"),
+  reportsYear: document.querySelector("#reportsYear"),
   reportsStart: document.querySelector("#reportsStart"),
   reportsEnd: document.querySelector("#reportsEnd"),
   reportsBestDay: document.querySelector("#reportsBestDay"),
@@ -581,6 +586,7 @@ function bindEvents() {
   }
   if (els.reportsStart) els.reportsStart.addEventListener("change", renderReportsPage);
   if (els.reportsEnd) els.reportsEnd.addEventListener("change", renderReportsPage);
+  if (els.reportsYear) els.reportsYear.addEventListener("change", renderReportsPage);
   document.querySelectorAll(".reports-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       document.querySelectorAll(".reports-tab").forEach((t) => t.classList.remove("active"));
@@ -1888,6 +1894,7 @@ function renderProgressPage() {
 function renderRulesTable(daily) {
   const rows = [
     ["Start my day by", state.rules.startTime, 0, state.rules.startTime, followRateForRule(daily, "start")],
+    ["Stop trading by", state.rules.stopTime || "15:30", 0, state.rules.stopTime || "15:30", followRateForRule(daily, "stop")],
     ["Link trades to playbook", "100%", 0, `${journalCoverage()}%`, journalCoverage()],
     ["Input Stop loss to all trades", "100%", 0, "0%", 0],
     ["Net max loss /trade", money(state.rules.maxLossTradeValue), 2, money(avgMaxLossTrade(daily)), maxLossTradeFollowRate(daily)],
@@ -1903,11 +1910,26 @@ function renderRulesTable(daily) {
 }
 
 function evaluateDayRules(dayKey, trades) {
-  const earliest = trades.map((trade) => timeToMinutes(trade.openTime || tradeOpenTime(trade))).sort((a, b) => a - b)[0];
+  const openMinutes = trades.map((trade) => timeToMinutes(trade.openTime || tradeOpenTime(trade))).sort((a, b) => a - b);
+  const earliest = openMinutes[0];
+  const latest = openMinutes.at(-1);
+  const stopThreshold = timeToMinutes(state.rules.stopTime || "15:30");
+  // Trades opened AFTER the stop time count as violations
+  const lateTrades = trades.filter((trade) => {
+    const openMin = timeToMinutes(trade.openTime || tradeOpenTime(trade));
+    return Number.isFinite(openMin) && openMin > stopThreshold;
+  });
   const dayPnl = sum(trades.map((trade) => trade.netPnl));
   const maxTradeLoss = Math.max(0, ...trades.map((trade) => trade.netPnl < 0 ? Math.abs(trade.netPnl) : 0));
   const baseChecks = [
     { label: "Start my day by", passed: !state.rules.startDay || !trades.length || earliest <= timeToMinutes(state.rules.startTime), value: state.rules.startTime },
+    {
+      label: "Stop trading by",
+      passed: !state.rules.stopTrading || !trades.length || lateTrades.length === 0,
+      value: trades.length
+        ? `${lateTrades.length ? lateTrades.length + " late trade" + (lateTrades.length === 1 ? "" : "s") : "Last open " + minutesToTime(latest ?? 0)} / ${state.rules.stopTime || "15:30"}`
+        : (state.rules.stopTime || "15:30"),
+    },
     { label: "Link trades to playbook", passed: !state.rules.linkPlaybook || trades.every((trade) => state.journals[trade.id]?.strategy), value: `${trades.filter((trade) => state.journals[trade.id]?.strategy).length} / ${trades.length}` },
     { label: "Input Stop loss to all trades", passed: !state.rules.stopLoss || trades.every((trade) => state.journals[trade.id]?.stopLoss), value: `${trades.filter((trade) => state.journals[trade.id]?.stopLoss).length} / ${trades.length}` },
     { label: "Net max loss /trade", passed: !state.rules.maxLossTrade || maxTradeLoss <= state.rules.maxLossTradeValue, value: `${money(maxTradeLoss)} / ${money(state.rules.maxLossTradeValue)}` },
@@ -1955,6 +1977,8 @@ function openRulesDialog() {
   els.ruleReminderTime.value = state.rules.reminderTime;
   els.ruleStartDay.checked = state.rules.startDay;
   els.ruleStartTime.value = state.rules.startTime;
+  els.ruleStopTrading.checked = Boolean(state.rules.stopTrading);
+  els.ruleStopTime.value = state.rules.stopTime || "15:30";
   els.ruleLinkPlaybook.checked = state.rules.linkPlaybook;
   els.ruleStopLoss.checked = state.rules.stopLoss;
   els.ruleMaxLossTrade.checked = state.rules.maxLossTrade;
@@ -2017,6 +2041,8 @@ function saveRules() {
     reminderTime: els.ruleReminderTime.value || "21:15",
     startDay: els.ruleStartDay.checked,
     startTime: els.ruleStartTime.value || "09:30",
+    stopTrading: els.ruleStopTrading.checked,
+    stopTime: els.ruleStopTime.value || "15:30",
     linkPlaybook: els.ruleLinkPlaybook.checked,
     stopLoss: els.ruleStopLoss.checked,
     maxLossTrade: els.ruleMaxLossTrade.checked,
@@ -2434,8 +2460,12 @@ function renderJournalTradeRow(trade) {
 
 function renderReportsPage() {
   if (!els.reportsView) return;
+  populateReportsYearSelect();
   const range = els.reportsRange?.value || "ytd";
   const today = new Date();
+  // For quarter filters, pick the year from the year selector (defaults to current year).
+  // This lets users compare Q1 2025 vs Q1 2026 without a custom range.
+  const quarterYear = Number(els.reportsYear?.value) || today.getFullYear();
   let startDate = null;
   let endDate = today;
   if (range === "all") {
@@ -2450,6 +2480,18 @@ function renderReportsPage() {
     startDate = new Date(today); startDate.setDate(today.getDate() - 90);
   } else if (range === "last365") {
     startDate = new Date(today); startDate.setDate(today.getDate() - 365);
+  } else if (range === "q1") {
+    startDate = new Date(quarterYear, 0, 1);
+    endDate = new Date(quarterYear, 2, 31);
+  } else if (range === "q2") {
+    startDate = new Date(quarterYear, 3, 1);
+    endDate = new Date(quarterYear, 5, 30);
+  } else if (range === "q3") {
+    startDate = new Date(quarterYear, 6, 1);
+    endDate = new Date(quarterYear, 8, 30);
+  } else if (range === "q4") {
+    startDate = new Date(quarterYear, 9, 1);
+    endDate = new Date(quarterYear, 11, 31);
   } else if (range === "custom") {
     const s = els.reportsStart?.value;
     const e = els.reportsEnd?.value;
@@ -2485,6 +2527,30 @@ function renderReportsPage() {
   } else {
     renderReportsBreakdown(trades, "month");
     if (els.reportsBreakdownLabel) els.reportsBreakdownLabel.textContent = "Month";
+  }
+}
+
+function populateReportsYearSelect() {
+  if (!els.reportsYear) return;
+  // Show the year picker only for quarter ranges (it doesn't apply to YTD/last-N etc.)
+  const range = els.reportsRange?.value;
+  const isQuarter = range === "q1" || range === "q2" || range === "q3" || range === "q4";
+  els.reportsYear.hidden = !isQuarter;
+  if (!isQuarter) return;
+  // Build the list from years actually present in user's trade history (newest first),
+  // always including the current year so quarter filters work even on a fresh install.
+  const years = new Set([new Date().getFullYear()]);
+  state.trades.forEach((trade) => {
+    if (trade.closeDate) {
+      const y = parseInt(trade.closeDate.slice(0, 4), 10);
+      if (Number.isFinite(y)) years.add(y);
+    }
+  });
+  const sorted = [...years].sort((a, b) => b - a);
+  const current = els.reportsYear.value;
+  els.reportsYear.innerHTML = sorted.map((y) => `<option value="${y}">${y}</option>`).join("");
+  if (current && sorted.includes(Number(current))) {
+    els.reportsYear.value = current;
   }
 }
 
@@ -3357,7 +3423,11 @@ function displaySymbol(trade) {
 
 function displayInstrument(trade) {
   if (trade.expiry && trade.strike && trade.optionType) {
-    return `${formatOptionExpiry(trade.expiry)} ${Number(trade.strike).toLocaleString("en-US")} ${trade.optionType.toUpperCase()}`;
+    const underlying = String(trade.underlying || trade.symbol || "").toUpperCase();
+    const expiry = formatOptionExpiry(trade.expiry);
+    const strike = Number(trade.strike).toLocaleString("en-US");
+    const type = trade.optionType.toUpperCase();
+    return underlying ? `${underlying} ${expiry} ${strike} ${type}` : `${expiry} ${strike} ${type}`;
   }
   return displaySymbol(trade);
 }
