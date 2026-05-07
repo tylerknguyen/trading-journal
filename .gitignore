@@ -15,3 +15,6 @@ conf/
 smoke-*.png
 .claude/
 webull_probe.py
+# Stray Obsidian vault if one ever gets created in the project root
+Trading Journal/
+.obsidian/
