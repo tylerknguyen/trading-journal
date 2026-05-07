@@ -668,6 +668,15 @@ function bindEvents() {
   if (els.playbookNewButton) els.playbookNewButton.addEventListener("click", () => openPlaybookDialog(null));
   if (els.playbookSaveButton) els.playbookSaveButton.addEventListener("click", savePlaybook);
   if (els.playbookDeleteButton) els.playbookDeleteButton.addEventListener("click", deletePlaybook);
+  // Explicit close buttons (X + Cancel). Without this, type="button" prevents
+  // the dialog from closing, and HTML5 `required` on the Name input was blocking
+  // submit-style closes when the field was blank.
+  document.querySelectorAll("[data-playbook-close]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.activePlaybookId = null;
+      els.playbookDialog?.close();
+    });
+  });
 
   // Settings page wiring
   if (els.settingsTheme) {
@@ -2691,7 +2700,9 @@ function renderJournalTradeRow(trade) {
   const lessonText = journal.lesson ? journal.lesson : "";
   const tagBits = [];
   if (journal.strategy) tagBits.push(`<span class="journal-tag setup">${escapeHtml(journal.strategy)}</span>`);
-  if (journal.emotion && journal.emotion !== "Focused") tagBits.push(`<span class="journal-tag emotion">${escapeHtml(journal.emotion)}</span>`);
+  // Always surface the emotion (even the default "Focused") so reviewing past
+  // trades shows the full mental-state context, not just outliers.
+  if (journal.emotion) tagBits.push(`<span class="journal-tag emotion ${journal.emotion.toLowerCase()}">${escapeHtml(journal.emotion)}</span>`);
   return `<article class="journal-trade-row" data-trade-id="${escapeHtml(trade.id)}">
     <div class="journal-trade-head">
       <span class="journal-trade-time">${escapeHtml(tradeOpenTime(trade) || "--")}</span>

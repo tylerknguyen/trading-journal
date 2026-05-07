@@ -539,12 +539,12 @@
                 <h2 id="playbookDialogTitle">New playbook</h2>
                 <p>Define the strategy and the rules to execute it. Tagging a trade with this name auto-links it.</p>
               </div>
-              <button class="icon-close" value="cancel" aria-label="Close">×</button>
+              <button class="icon-close" type="button" data-playbook-close aria-label="Close">×</button>
             </header>
             <div class="playbook-fields">
               <label class="playbook-field">
                 <span>Name</span>
-                <input id="playbookName" type="text" placeholder="0DTE put credit, BnR, Reclaim..." required />
+                <input id="playbookName" type="text" placeholder="0DTE put credit, BnR, Reclaim..." />
               </label>
               <label class="playbook-field">
                 <span>Description</span>
@@ -574,7 +574,7 @@
             <footer>
               <button id="playbookDeleteButton" class="ghost-button" value="delete" type="button">Delete</button>
               <div>
-                <button class="toolbar-button" value="cancel" type="button">Cancel</button>
+                <button class="toolbar-button" type="button" data-playbook-close>Cancel</button>
                 <button id="playbookSaveButton" class="primary-button" value="save" type="button">Save playbook</button>
               </div>
             </footer>

@@ -2947,6 +2947,43 @@ svg.radar-svg {
   border: 1px solid rgba(244, 160, 45, 0.32);
 }
 
+/* Emotion-specific color overrides so the chip carries meaning at a glance */
+.journal-tag.emotion.focused,
+.journal-tag.emotion.patient {
+  background: rgba(67, 200, 154, 0.13);
+  color: var(--green-dark);
+  border-color: rgba(67, 200, 154, 0.32);
+}
+.journal-tag.emotion.fomo,
+.journal-tag.emotion.revenge {
+  background: rgba(255, 102, 109, 0.13);
+  color: var(--red-dark);
+  border-color: rgba(255, 102, 109, 0.32);
+}
+.journal-tag.emotion.hesitant {
+  background: rgba(244, 160, 45, 0.14);
+  color: #b16f12;
+  border-color: rgba(244, 160, 45, 0.32);
+}
+
+[data-theme="dark"] .journal-tag.emotion.focused,
+[data-theme="dark"] .journal-tag.emotion.patient {
+  background: rgba(67, 200, 154, 0.18);
+  color: #7eddb6;
+  border-color: rgba(67, 200, 154, 0.4);
+}
+[data-theme="dark"] .journal-tag.emotion.fomo,
+[data-theme="dark"] .journal-tag.emotion.revenge {
+  background: rgba(255, 123, 128, 0.18);
+  color: #ffa3a8;
+  border-color: rgba(255, 123, 128, 0.4);
+}
+[data-theme="dark"] .journal-tag.emotion.hesitant {
+  background: rgba(244, 160, 45, 0.2);
+  color: #f4c97e;
+  border-color: rgba(244, 160, 45, 0.4);
+}
+
 .journal-trade-notes {
   margin: 0;
   padding-left: 68px;
