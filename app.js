@@ -2445,7 +2445,7 @@ function renderJournalTradeRow(trade) {
   return `<article class="journal-trade-row" data-trade-id="${escapeHtml(trade.id)}">
     <div class="journal-trade-head">
       <span class="journal-trade-time">${escapeHtml(tradeOpenTime(trade) || "--")}</span>
-      <span class="journal-trade-instrument" title="${escapeHtml(trade.contract || trade.symbol)}">${escapeHtml(displayInstrument(trade))}</span>
+      <span class="journal-trade-instrument" title="${escapeHtml(displayInstrument(trade))}">${escapeHtml(displayInstrumentShort(trade))}</span>
       <span class="journal-trade-side">${escapeHtml(displaySide(trade))}</span>
       <span class="journal-trade-pnl ${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</span>
       <button class="journal-trade-edit small-button" type="button" data-trade-id="${escapeHtml(trade.id)}">${hasJournal ? "Edit" : "Journal"}</button>
@@ -3428,6 +3428,18 @@ function displayInstrument(trade) {
     const strike = Number(trade.strike).toLocaleString("en-US");
     const type = trade.optionType.toUpperCase();
     return underlying ? `${underlying} ${expiry} ${strike} ${type}` : `${expiry} ${strike} ${type}`;
+  }
+  return displaySymbol(trade);
+}
+
+// Compact label for surfaces that already imply a date context (e.g. journal
+// day cards, day modal). Drops the expiry to reduce visual noise: "INTC 115 CALL"
+function displayInstrumentShort(trade) {
+  if (trade.strike && trade.optionType) {
+    const underlying = String(trade.underlying || trade.symbol || "").toUpperCase();
+    const strike = Number(trade.strike).toLocaleString("en-US");
+    const type = trade.optionType.toUpperCase();
+    return underlying ? `${underlying} ${strike} ${type}` : `${strike} ${type}`;
   }
   return displaySymbol(trade);
 }
