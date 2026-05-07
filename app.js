@@ -4,6 +4,7 @@ const DATA_KEY = "tradezella_local_trades_v1";
 const META_KEY = "tradezella_local_import_meta_v1";
 const RULES_KEY = "trading_journal_rules_v1";
 const EVENTS_KEY = "trading_journal_day_events_v1";
+const PLAYBOOKS_KEY = "trading_journal_playbooks_v1";
 const WEBULL_SYNC_COOLDOWN_KEY = "trading_journal_webull_sync_cooldown_until_v1";
 const THEME_KEY = "trading_journal_theme_v1";
 
@@ -128,6 +129,8 @@ const state = {
   reportsTab: "days",
   pendingChartImage: null,
   dayEvents: loadDayEvents(),
+  playbooks: loadPlaybooks(),
+  activePlaybookId: null,
 };
 
 const els = {
@@ -141,6 +144,19 @@ const els = {
   tradeView: document.querySelector("#tradeView"),
   journalView: document.querySelector("#journalView"),
   reportsView: document.querySelector("#reportsView"),
+  playbookView: document.querySelector("#playbookView"),
+  playbookList: document.querySelector("#playbookList"),
+  playbookNewButton: document.querySelector("#playbookNewButton"),
+  playbookDialog: document.querySelector("#playbookDialog"),
+  playbookDialogTitle: document.querySelector("#playbookDialogTitle"),
+  playbookName: document.querySelector("#playbookName"),
+  playbookDescription: document.querySelector("#playbookDescription"),
+  playbookEntry: document.querySelector("#playbookEntry"),
+  playbookExit: document.querySelector("#playbookExit"),
+  playbookRisk: document.querySelector("#playbookRisk"),
+  playbookNotes: document.querySelector("#playbookNotes"),
+  playbookSaveButton: document.querySelector("#playbookSaveButton"),
+  playbookDeleteButton: document.querySelector("#playbookDeleteButton"),
   lastImport: document.querySelector("#lastImport"),
   dateRange: document.querySelector("#dateRange"),
   netPnl: document.querySelector("#netPnl"),
@@ -595,14 +611,19 @@ function bindEvents() {
       renderReportsPage();
     });
   });
+
+  // Playbook page wiring
+  if (els.playbookNewButton) els.playbookNewButton.addEventListener("click", () => openPlaybookDialog(null));
+  if (els.playbookSaveButton) els.playbookSaveButton.addEventListener("click", savePlaybook);
+  if (els.playbookDeleteButton) els.playbookDeleteButton.addEventListener("click", deletePlaybook);
 }
 
 function switchView(view, options = {}) {
-  const nextView = ["dashboard", "day", "progress", "trade", "journal", "reports"].includes(view) ? view : "dashboard";
+  const nextView = ["dashboard", "day", "progress", "trade", "journal", "reports", "playbook"].includes(view) ? view : "dashboard";
   state.activeView = nextView;
   if (options.date) state.selectedDay = options.date;
   if (options.tradeId) state.activeTradeId = options.tradeId;
-  [els.dashboardView, els.dayView, els.progressView, els.tradeView, els.journalView, els.reportsView].forEach((section) => {
+  [els.dashboardView, els.dayView, els.progressView, els.tradeView, els.journalView, els.reportsView, els.playbookView].forEach((section) => {
     if (!section) return;
     section.hidden = section.id !== `${state.activeView}View`;
     section.classList.toggle("active-view", !section.hidden);
@@ -615,6 +636,7 @@ function switchView(view, options = {}) {
   if (state.activeView === "trade") renderTradePage();
   if (state.activeView === "journal") renderJournalPage();
   if (state.activeView === "reports") renderReportsPage();
+  if (state.activeView === "playbook") renderPlaybookPage();
   const hash = state.activeView === "trade" && state.activeTradeId
     ? `#trade=${encodeURIComponent(state.activeTradeId)}`
     : state.activeView === "day" && state.selectedDay
@@ -783,6 +805,58 @@ function addDayEvent(dateKey, label) {
 function removeDayEvent(dateKey, label) {
   const current = getDayEvents(dateKey);
   setDayEvents(dateKey, current.filter((e) => e !== label));
+}
+
+function loadPlaybooks() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PLAYBOOKS_KEY) || "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistPlaybooks() {
+  localStorage.setItem(PLAYBOOKS_KEY, JSON.stringify(state.playbooks || []));
+}
+
+function newPlaybookId() {
+  return `pb_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function findPlaybook(id) {
+  return (state.playbooks || []).find((pb) => pb.id === id);
+}
+
+function findPlaybookByName(name) {
+  if (!name) return null;
+  const lower = String(name).toLowerCase().trim();
+  return (state.playbooks || []).find((pb) => (pb.name || "").toLowerCase().trim() === lower) || null;
+}
+
+function computePlaybookStats(playbook) {
+  // A playbook "owns" any trade whose journal.strategy matches its name (case-insensitive).
+  // This means existing setup tags automatically link to playbooks the user creates later.
+  const targetName = String(playbook.name || "").toLowerCase().trim();
+  if (!targetName) return { trades: [], count: 0, winRate: 0, totalPnl: 0, avgPnl: 0, expectancy: 0 };
+  const trades = state.trades.filter((t) => isClosedTrade(t)).filter((t) => {
+    const tag = (state.journals[t.id]?.strategy || "").toLowerCase().trim();
+    return tag === targetName;
+  });
+  const wins = trades.filter((t) => t.netPnl > 0);
+  const losses = trades.filter((t) => t.netPnl < 0);
+  const winSum = sum(wins.map((t) => t.netPnl));
+  const lossSum = sum(losses.map((t) => t.netPnl));
+  const totalPnl = sum(trades.map((t) => t.netPnl));
+  const winRate = trades.length ? wins.length / trades.length : 0;
+  const avgWin = wins.length ? winSum / wins.length : 0;
+  const avgLoss = losses.length ? lossSum / losses.length : 0;
+  return {
+    trades, count: trades.length, wins: wins.length, losses: losses.length,
+    winRate, totalPnl: roundCurrency(totalPnl),
+    avgWin: roundCurrency(avgWin), avgLoss: roundCurrency(avgLoss),
+    expectancy: roundCurrency(winRate * avgWin + (1 - winRate) * avgLoss),
+  };
 }
 
 function renderImportMeta() {
@@ -2759,6 +2833,163 @@ function renderReportsBars(series) {
   </svg>`;
 }
 
+function renderPlaybookPage() {
+  if (!els.playbookList) return;
+  const playbooks = state.playbooks || [];
+  if (!playbooks.length) {
+    els.playbookList.innerHTML = `<div class="playbook-empty">
+      <strong>No playbooks yet.</strong>
+      <p>Document a strategy you trade — entry rules, exit rules, risk. Tag trades with the playbook's name and stats roll up automatically.</p>
+      <button class="primary-button" type="button" onclick="document.querySelector('#playbookNewButton').click()">+ Create your first playbook</button>
+    </div>`;
+    return;
+  }
+  // Augment each playbook with its computed stats so we can sort by P&L
+  const decorated = playbooks.map((pb) => ({ pb, stats: computePlaybookStats(pb) }));
+  decorated.sort((a, b) => b.stats.totalPnl - a.stats.totalPnl);
+
+  els.playbookList.innerHTML = decorated.map(({ pb, stats }) => renderPlaybookCard(pb, stats)).join("");
+  els.playbookList.querySelectorAll("[data-playbook-edit]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openPlaybookDialog(btn.dataset.playbookEdit);
+    });
+  });
+  els.playbookList.querySelectorAll("[data-playbook-trade]").forEach((row) => {
+    row.addEventListener("click", () => openTradeDetail(row.dataset.playbookTrade));
+  });
+}
+
+function renderPlaybookCard(playbook, stats) {
+  const fmtList = (text) => {
+    if (!text) return `<p class="playbook-empty-text">--</p>`;
+    // Each non-empty line becomes a list item; lines starting with '-' get the dash stripped
+    const items = String(text).split(/\r?\n/).map((line) => line.replace(/^\s*[-•]\s*/, "").trim()).filter(Boolean);
+    if (!items.length) return `<p class="playbook-empty-text">--</p>`;
+    return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+  };
+  const recentTrades = stats.trades.slice().sort((a, b) =>
+    `${b.closeDate} ${b.closeTime || ""}`.localeCompare(`${a.closeDate} ${a.closeTime || ""}`)
+  ).slice(0, 5);
+  const tradesBlock = recentTrades.length
+    ? `<table class="playbook-trades-table">
+        <thead><tr><th>Date</th><th>Instrument</th><th>Side</th><th>Net P&L</th></tr></thead>
+        <tbody>
+          ${recentTrades.map((trade) => `<tr data-playbook-trade="${escapeHtml(trade.id)}" tabindex="0">
+            <td>${formatShortDate(trade.closeDate)}</td>
+            <td title="${escapeHtml(displayInstrument(trade))}">${escapeHtml(displayInstrumentShort(trade))}</td>
+            <td>${escapeHtml(displaySide(trade))}</td>
+            <td class="${trade.netPnl >= 0 ? "positive" : "negative"}">${money(trade.netPnl)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      ${stats.count > recentTrades.length ? `<p class="playbook-trades-more">…and ${stats.count - recentTrades.length} earlier trade${stats.count - recentTrades.length === 1 ? "" : "s"} tagged with this strategy.</p>` : ""}`
+    : `<p class="playbook-empty-text">No tagged trades yet. Tag a trade's strategy with <code>${escapeHtml(playbook.name)}</code> and it'll appear here.</p>`;
+
+  return `<article class="playbook-card" data-playbook-id="${escapeHtml(playbook.id)}">
+    <header class="playbook-card-header">
+      <div>
+        <h2>${escapeHtml(playbook.name)}</h2>
+        ${playbook.description ? `<p>${escapeHtml(playbook.description)}</p>` : ""}
+      </div>
+      <button class="small-button" type="button" data-playbook-edit="${escapeHtml(playbook.id)}">Edit</button>
+    </header>
+    <div class="playbook-stats-row">
+      <div class="playbook-stat"><span>Trades</span><strong>${stats.count}</strong></div>
+      <div class="playbook-stat"><span>Win rate</span><strong>${(stats.winRate * 100).toFixed(0)}%</strong></div>
+      <div class="playbook-stat"><span>Total P&L</span><strong class="${stats.totalPnl >= 0 ? "positive" : "negative"}">${money(stats.totalPnl)}</strong></div>
+      <div class="playbook-stat"><span>Expectancy</span><strong class="${stats.expectancy >= 0 ? "positive" : "negative"}">${money(stats.expectancy)}</strong></div>
+      <div class="playbook-stat"><span>Avg win / loss</span><strong>${money(stats.avgWin)} / ${money(stats.avgLoss)}</strong></div>
+    </div>
+    <div class="playbook-rules">
+      <section class="playbook-rules-section">
+        <h3>Entry rules</h3>
+        ${fmtList(playbook.entry)}
+      </section>
+      <section class="playbook-rules-section">
+        <h3>Exit rules</h3>
+        ${fmtList(playbook.exit)}
+      </section>
+      <section class="playbook-rules-section">
+        <h3>Risk / sizing</h3>
+        ${playbook.risk ? `<p>${escapeHtml(playbook.risk)}</p>` : `<p class="playbook-empty-text">--</p>`}
+      </section>
+      <section class="playbook-rules-section">
+        <h3>Notes / lessons</h3>
+        ${playbook.notes ? `<p>${escapeHtml(playbook.notes)}</p>` : `<p class="playbook-empty-text">--</p>`}
+      </section>
+    </div>
+    <div class="playbook-trades-block">
+      <h3>Recent tagged trades</h3>
+      ${tradesBlock}
+    </div>
+  </article>`;
+}
+
+function openPlaybookDialog(playbookId) {
+  state.activePlaybookId = playbookId || null;
+  const existing = playbookId ? findPlaybook(playbookId) : null;
+  if (els.playbookDialogTitle) {
+    els.playbookDialogTitle.textContent = existing ? "Edit playbook" : "New playbook";
+  }
+  els.playbookName.value = existing?.name || "";
+  els.playbookDescription.value = existing?.description || "";
+  els.playbookEntry.value = existing?.entry || "";
+  els.playbookExit.value = existing?.exit || "";
+  els.playbookRisk.value = existing?.risk || "";
+  els.playbookNotes.value = existing?.notes || "";
+  if (els.playbookDeleteButton) els.playbookDeleteButton.hidden = !existing;
+  els.playbookDialog.showModal();
+}
+
+function savePlaybook() {
+  const name = els.playbookName.value.trim();
+  if (!name) {
+    showToast("Playbook needs a name.");
+    return;
+  }
+  // Collision check: don't create two playbooks with the exact same name (case-insensitive),
+  // since stats lookup keys off the name.
+  const collision = findPlaybookByName(name);
+  if (collision && collision.id !== state.activePlaybookId) {
+    showToast(`A playbook named "${name}" already exists.`);
+    return;
+  }
+  const fields = {
+    name,
+    description: els.playbookDescription.value.trim(),
+    entry: els.playbookEntry.value.trim(),
+    exit: els.playbookExit.value.trim(),
+    risk: els.playbookRisk.value.trim(),
+    notes: els.playbookNotes.value.trim(),
+    updatedAt: new Date().toISOString(),
+  };
+  if (state.activePlaybookId) {
+    const idx = (state.playbooks || []).findIndex((pb) => pb.id === state.activePlaybookId);
+    if (idx >= 0) {
+      state.playbooks[idx] = { ...state.playbooks[idx], ...fields };
+    }
+  } else {
+    state.playbooks = [...(state.playbooks || []), { id: newPlaybookId(), createdAt: new Date().toISOString(), ...fields }];
+  }
+  persistPlaybooks();
+  state.activePlaybookId = null;
+  els.playbookDialog.close();
+  renderPlaybookPage();
+  showToast("Playbook saved.");
+}
+
+function deletePlaybook() {
+  if (!state.activePlaybookId) return;
+  if (!confirm("Delete this playbook? Trades tagged with this strategy will keep their tags but no longer link here.")) return;
+  state.playbooks = (state.playbooks || []).filter((pb) => pb.id !== state.activePlaybookId);
+  persistPlaybooks();
+  state.activePlaybookId = null;
+  els.playbookDialog.close();
+  renderPlaybookPage();
+  showToast("Playbook deleted.");
+}
+
 function openJournalImagePreview(src) {
   const existing = document.querySelector(".journal-image-modal");
   if (existing) existing.remove();
@@ -3033,10 +3264,17 @@ function tradeSetup(trade) {
 }
 
 function knownSetups() {
+  // Include both: strategies the user has already tagged on trades AND named
+  // playbooks they've created (even if no trade uses that name yet — picking
+  // the playbook name auto-links future trades to it).
   const set = new Set();
   Object.values(state.journals || {}).forEach((entry) => {
     const tag = (entry?.strategy || "").trim();
     if (tag) set.add(tag);
+  });
+  (state.playbooks || []).forEach((pb) => {
+    const name = (pb?.name || "").trim();
+    if (name) set.add(name);
   });
   return [...set].sort();
 }

@@ -3486,6 +3486,296 @@ svg.radar-svg {
   cursor: default;
 }
 
+/* ----------------------------------------------------------------
+   Playbook page + dialog
+   ---------------------------------------------------------------- */
+
+.playbook-page {
+  max-width: 1980px;
+  margin: 0 auto;
+}
+
+.playbook-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.playbook-page-header h1 { font-size: 17px; font-weight: 750; }
+.playbook-page-header p { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+.playbook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.playbook-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  padding: 48px 24px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  background: var(--soft-line);
+  color: var(--muted);
+  text-align: center;
+}
+.playbook-empty strong { color: var(--ink); font-size: 15px; }
+.playbook-empty p { margin: 0; font-size: 13px; max-width: 460px; }
+
+[data-theme="dark"] .playbook-empty { background: #14101e; border-color: var(--line); }
+
+.playbook-card {
+  border: 1px solid var(--soft-line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+}
+
+[data-theme="dark"] .playbook-card { border-color: var(--line); }
+
+.playbook-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.playbook-card-header h2 {
+  font-size: 16px;
+  font-weight: 750;
+  margin: 0;
+}
+
+.playbook-card-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.playbook-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 12px 0;
+  margin-bottom: 12px;
+  border-top: 1px solid var(--soft-line);
+  border-bottom: 1px solid var(--soft-line);
+}
+
+[data-theme="dark"] .playbook-stats-row {
+  border-top-color: var(--line);
+  border-bottom-color: var(--line);
+}
+
+.playbook-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.playbook-stat span {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.playbook-stat strong {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.playbook-rules {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+
+.playbook-rules-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+
+.playbook-rules-section ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.playbook-rules-section li { margin-bottom: 2px; }
+
+.playbook-rules-section p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.playbook-empty-text { color: var(--subtle); font-style: italic; margin: 0; font-size: 13px; }
+
+.playbook-trades-block h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+
+.playbook-trades-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.playbook-trades-table th,
+.playbook-trades-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--soft-line);
+}
+[data-theme="dark"] .playbook-trades-table th,
+[data-theme="dark"] .playbook-trades-table td { border-bottom-color: var(--line); }
+
+.playbook-trades-table th {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.playbook-trades-table tbody tr {
+  cursor: pointer;
+}
+
+.playbook-trades-table tbody tr:hover {
+  background: var(--soft-line);
+}
+
+[data-theme="dark"] .playbook-trades-table tbody tr:hover { background: #1f1a2b; }
+
+.playbook-trades-more {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Playbook edit dialog */
+.playbook-dialog {
+  width: min(820px, calc(100vw - 32px));
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 24px 80px rgba(24, 19, 38, 0.28);
+}
+
+.playbook-dialog::backdrop { background: rgba(15, 10, 28, 0.48); }
+[data-theme="dark"] .playbook-dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+
+.playbook-card form,
+.playbook-dialog .playbook-card {
+  background: var(--panel);
+  border-radius: 10px;
+}
+
+.playbook-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--soft-line);
+}
+[data-theme="dark"] .playbook-dialog header { border-bottom-color: var(--line); }
+
+.playbook-dialog header h2 { font-size: 17px; margin: 0; }
+.playbook-dialog header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; max-width: 520px; }
+
+.playbook-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 22px;
+}
+
+.playbook-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.playbook-field span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.playbook-field input,
+.playbook-field textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+[data-theme="dark"] .playbook-field input,
+[data-theme="dark"] .playbook-field textarea {
+  background: #1f1a2b;
+}
+
+.playbook-field input:focus,
+.playbook-field textarea:focus {
+  outline: none;
+  border-color: var(--purple);
+}
+
+.playbook-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.playbook-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  border-top: 1px solid var(--soft-line);
+  gap: 10px;
+}
+
+.playbook-dialog footer > div { display: flex; gap: 8px; }
+
+[data-theme="dark"] .playbook-dialog footer { border-top-color: var(--line); }
+
+@media (max-width: 720px) {
+  .playbook-rules { grid-template-columns: 1fr; }
+  .playbook-field-row { grid-template-columns: 1fr; }
+}
+
 /* Inline setup-tag input inside the day modal trade table */
 .setup-tag-input {
   width: 100%;
