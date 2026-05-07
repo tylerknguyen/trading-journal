@@ -1,0 +1,5 @@
+# Force LF line endings on Unix shell scripts and macOS launcher commands.
+# Without this, the .command file gets CRLF on Windows commits and macOS
+# refuses to execute the shebang line.
+*.command text eol=lf
+*.sh      text eol=lf

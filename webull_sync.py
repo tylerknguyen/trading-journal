@@ -46,14 +46,30 @@ class WebullConfig:
     token_verify_interval_seconds: int
 
     @classmethod
-    def load(cls) -> "WebullConfig":
+    def load(cls, overrides: dict[str, Any] | None = None) -> "WebullConfig":
+        """Build config from .env, then apply optional overrides from the
+        frontend (Settings page sends these per-request so users don't have
+        to edit .env or restart the server). Empty/whitespace overrides are
+        ignored so the user can clear a Settings field without nuking .env.
+        """
         load_dotenv(ROOT / ".env")
+        overrides = overrides or {}
+        def pick(key: str, default: str = "") -> str:
+            value = overrides.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            return os.environ.get(default or key, "").strip()
+        app_key = pick("appKey", "WEBULL_APP_KEY")
+        app_secret = pick("appSecret", "WEBULL_APP_SECRET")
+        account_id = pick("accountId", "WEBULL_ACCOUNT_ID")
+        region = pick("region", "WEBULL_REGION") or "us"
+        endpoint_value = (overrides.get("apiEndpoint") or os.environ.get("WEBULL_API_ENDPOINT", "api.webull.com")).strip()
         return cls(
-            app_key=os.environ.get("WEBULL_APP_KEY", "").strip(),
-            app_secret=os.environ.get("WEBULL_APP_SECRET", "").strip(),
-            region=os.environ.get("WEBULL_REGION", "us").strip() or "us",
-            api_endpoint=normalize_api_endpoint(os.environ.get("WEBULL_API_ENDPOINT", "api.webull.com")),
-            account_id=os.environ.get("WEBULL_ACCOUNT_ID", "").strip(),
+            app_key=app_key,
+            app_secret=app_secret,
+            region=region,
+            api_endpoint=normalize_api_endpoint(endpoint_value),
+            account_id=account_id,
             page_size=int(os.environ.get("WEBULL_ORDER_PAGE_SIZE", "10") or "10"),
             sync_chunk_days=int(os.environ.get("WEBULL_SYNC_CHUNK_DAYS", "31") or "31"),
             sync_request_delay_seconds=float(os.environ.get("WEBULL_SYNC_REQUEST_DELAY_SECONDS", "10") or "10"),
@@ -124,9 +140,10 @@ def default_sync_start_date() -> str:
 
 
 def sync_webull_orders(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    config = WebullConfig.load()
+    overrides = (payload or {}).get("webullCredentials") if isinstance(payload, dict) else None
+    config = WebullConfig.load(overrides if isinstance(overrides, dict) else None)
     if not config.configured:
-        raise WebullSyncError("Missing WEBULL_APP_KEY and WEBULL_APP_SECRET in .env")
+        raise WebullSyncError("Missing Webull App Key / App Secret. Set them in Settings, or in .env, then click Sync Webull again.")
     if importlib.util.find_spec("webull") is None:
         raise WebullSyncError("Missing official Webull SDK. Install webull-openapi-python-sdk in a Python 3.8-3.11 environment")
 

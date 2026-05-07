@@ -5,6 +5,28 @@ const META_KEY = "tradezella_local_import_meta_v1";
 const RULES_KEY = "trading_journal_rules_v1";
 const EVENTS_KEY = "trading_journal_day_events_v1";
 const PLAYBOOKS_KEY = "trading_journal_playbooks_v1";
+const WEBULL_CREDS_KEY = "trading_journal_webull_creds_v1";
+
+function loadWebullCreds() {
+  try {
+    return JSON.parse(localStorage.getItem(WEBULL_CREDS_KEY) || "{}") || {};
+  } catch { return {}; }
+}
+
+function saveWebullCreds(patch) {
+  const current = loadWebullCreds();
+  const next = { ...current, ...patch };
+  // Drop empty strings so the backend falls through to .env values cleanly
+  Object.keys(next).forEach((key) => {
+    if (typeof next[key] === "string" && !next[key].trim()) delete next[key];
+  });
+  localStorage.setItem(WEBULL_CREDS_KEY, JSON.stringify(next));
+  return next;
+}
+
+function clearWebullCreds() {
+  localStorage.removeItem(WEBULL_CREDS_KEY);
+}
 const WEBULL_SYNC_COOLDOWN_KEY = "trading_journal_webull_sync_cooldown_until_v1";
 const THEME_KEY = "trading_journal_theme_v1";
 
@@ -175,6 +197,11 @@ const els = {
   settingsExportButton: document.querySelector("#settingsExportButton"),
   settingsImportInput: document.querySelector("#settingsImportInput"),
   settingsResetTrades: document.querySelector("#settingsResetTrades"),
+  settingsAppKey: document.querySelector("#settingsAppKey"),
+  settingsAppSecret: document.querySelector("#settingsAppSecret"),
+  settingsAccountIdInput: document.querySelector("#settingsAccountIdInput"),
+  settingsCredsSave: document.querySelector("#settingsCredsSave"),
+  settingsCredsClear: document.querySelector("#settingsCredsClear"),
   lastImport: document.querySelector("#lastImport"),
   dateRange: document.querySelector("#dateRange"),
   netPnl: document.querySelector("#netPnl"),
@@ -688,6 +715,38 @@ function bindEvents() {
 
   // Rules widget on dashboard: Edit button opens the same rules dialog as Progress page
   if (els.rulesWidgetEdit) els.rulesWidgetEdit.addEventListener("click", openRulesDialog);
+
+  // Webull credential inputs: save / clear / show-hide toggle
+  if (els.settingsCredsSave) {
+    els.settingsCredsSave.addEventListener("click", () => {
+      saveWebullCreds({
+        appKey: els.settingsAppKey?.value || "",
+        appSecret: els.settingsAppSecret?.value || "",
+        accountId: els.settingsAccountIdInput?.value || "",
+      });
+      showToast("Credentials saved to this browser. Click Sync Webull to use them.");
+    });
+  }
+  if (els.settingsCredsClear) {
+    els.settingsCredsClear.addEventListener("click", () => {
+      if (!confirm("Clear Webull credentials stored in this browser? Sync will fall back to .env values.")) return;
+      clearWebullCreds();
+      if (els.settingsAppKey) els.settingsAppKey.value = "";
+      if (els.settingsAppSecret) els.settingsAppSecret.value = "";
+      if (els.settingsAccountIdInput) els.settingsAccountIdInput.value = "";
+      showToast("Credentials cleared. Sync will use .env values.");
+    });
+  }
+  // Show/hide toggle for password-style inputs
+  document.querySelectorAll("[data-toggle-credential]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = document.querySelector(`#${btn.dataset.toggleCredential}`);
+      if (!target) return;
+      const showing = target.type === "text";
+      target.type = showing ? "password" : "text";
+      btn.textContent = showing ? "Show" : "Hide";
+    });
+  });
 }
 
 function switchView(view, options = {}) {
@@ -1019,10 +1078,18 @@ async function syncWebull() {
   els.syncWebullButton.disabled = true;
   els.syncWebullButton.classList.add("syncing");
   try {
+    const creds = loadWebullCreds();
+    const body = { merge: true };
+    // Send any locally-stored credentials so the backend can use them instead
+    // of (or alongside) .env. Empty strings are dropped by saveWebullCreds, so
+    // .env values stay authoritative for any field the user hasn't filled in.
+    if (creds && Object.keys(creds).length) {
+      body.webullCredentials = creds;
+    }
     const response = await fetch("/api/webull/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ merge: true }),
+      body: JSON.stringify(body),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.ok) {
@@ -3011,6 +3078,12 @@ function renderSettingsPage() {
       if (els.settingsPageSize) els.settingsPageSize.textContent = String(statusPayload.pageSize ?? "--");
     })
     .catch(() => { /* ignore on hosted site */ });
+
+  // Webull credentials (locally stored, override .env when filled)
+  const creds = loadWebullCreds();
+  if (els.settingsAppKey) els.settingsAppKey.value = creds.appKey || "";
+  if (els.settingsAppSecret) els.settingsAppSecret.value = creds.appSecret || "";
+  if (els.settingsAccountIdInput) els.settingsAccountIdInput.value = creds.accountId || "";
 
   // Data summary
   const tradeCount = state.trades.length;

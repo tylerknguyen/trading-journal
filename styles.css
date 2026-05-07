@@ -3960,6 +3960,60 @@ svg.radar-svg {
 .ghost-button.danger:hover { background: rgba(255, 102, 109, 0.1); }
 [data-theme="dark"] .ghost-button.danger { color: #ff9ba0; border-color: rgba(255, 123, 128, 0.4); }
 
+.settings-credential-note {
+  margin: 0 18px 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(132, 120, 232, 0.08);
+  border: 1px solid rgba(132, 120, 232, 0.25);
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+.settings-credential-note code {
+  background: var(--soft-line);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11.5px;
+}
+
+[data-theme="dark"] .settings-credential-note {
+  background: rgba(132, 120, 232, 0.12);
+  border-color: rgba(132, 120, 232, 0.35);
+}
+[data-theme="dark"] .settings-credential-note code { background: #1f1a2b; }
+
+.settings-credential-input {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.settings-row input[type="password"],
+.settings-row input[type="text"] {
+  min-width: 280px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+}
+
+[data-theme="dark"] .settings-row input[type="password"],
+[data-theme="dark"] .settings-row input[type="text"] {
+  background: #1f1a2b;
+}
+
+.settings-row input[type="password"]:focus,
+.settings-row input[type="text"]:focus {
+  outline: none;
+  border-color: var(--purple);
+}
+
 /* Inline setup-tag input inside the day modal trade table */
 .setup-tag-input {
   width: 100%;

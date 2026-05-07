@@ -642,6 +642,51 @@
           </article>
 
           <article class="panel settings-panel">
+            <div class="panel-heading"><h2>Webull credentials</h2></div>
+            <p class="settings-credential-note">
+              Stored in this browser's local storage and only ever sent to the local Python backend on this machine.
+              Leaving a field blank falls back to <code>.env</code>. Fields override .env when filled.
+            </p>
+            <div class="settings-row">
+              <div>
+                <strong>App Key</strong>
+                <span>From Webull Developer Portal &rarr; API Keys Management.</span>
+              </div>
+              <div class="settings-credential-input">
+                <input id="settingsAppKey" type="password" autocomplete="off" placeholder="Set in .env, or override here" />
+                <button class="small-button" type="button" data-toggle-credential="settingsAppKey">Show</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>App Secret</strong>
+                <span>Treat like a password. Saved only on this device.</span>
+              </div>
+              <div class="settings-credential-input">
+                <input id="settingsAppSecret" type="password" autocomplete="off" placeholder="Set in .env, or override here" />
+                <button class="small-button" type="button" data-toggle-credential="settingsAppSecret">Show</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>Account ID (optional)</strong>
+                <span>Skips one Webull API call per sync. Auto-cached after first sync.</span>
+              </div>
+              <input id="settingsAccountIdInput" type="text" autocomplete="off" placeholder="Auto-detect on first sync" />
+            </div>
+            <div class="settings-row settings-actions-row">
+              <div>
+                <strong>Save credentials</strong>
+                <span>Click Save, then click Sync Webull on the dashboard.</span>
+              </div>
+              <div class="settings-action-buttons">
+                <button id="settingsCredsClear" class="ghost-button danger" type="button">Clear from browser</button>
+                <button id="settingsCredsSave" class="primary-button" type="button">Save</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel settings-panel">
             <div class="panel-heading"><h2>Webull sync</h2></div>
             <div class="settings-row">
               <div>
